@@ -64,6 +64,7 @@ export class APU {
   executeInstruction() {
     // Simplified SPC700 emulation
     // Full implementation would have all 256 opcodes
+    // eslint-disable-next-line no-unused-vars
     const opcode = this.readAPURAM(this.PC);
     this.PC = (this.PC + 1) & 0xFFFF;
     

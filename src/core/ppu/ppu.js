@@ -328,6 +328,7 @@ export class PPU {
   /**
    * Get pixel from a tile
    */
+  // eslint-disable-next-line no-unused-vars
   getTilePixel(layer, tileIndex, pixelX, pixelY, bpp) {
     // Simplified implementation
     // Actual implementation needs to properly read from VRAM
@@ -337,6 +338,7 @@ export class PPU {
   /**
    * Render sprites (objects)
    */
+  // eslint-disable-next-line no-unused-vars
   renderSprites(y) {
     // Check if sprites are enabled
     if ((this.registers.tm & 0x10) === 0) {
@@ -459,11 +461,12 @@ export class PPU {
     case 0x213D: // OPVCT - Vertical counter (low)
       return this.latchedVCounter & 0xFF;
       
-    case 0x213F: // STAT78 - PPU status
+    case 0x213F: { // STAT78 - PPU status
       const stat78 = 0x00 |
         (this.latchedHCounter & 0x100 ? 0x40 : 0) |
         (this.latchedVCounter & 0x100 ? 0x80 : 0);
       return stat78;
+    }
       
     default:
       return 0;
