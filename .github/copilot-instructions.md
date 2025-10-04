@@ -60,6 +60,15 @@ package.json       # Scripts & dependencies
 **New features:** Write tests alongside code, use `npm run test:watch`, aim for 80%+ coverage, test edge cases.
 **Recent additions:** 17 new opcodes implemented (0x00, 0x01, 0x02, 0x03, 0x0E, 0x22, 0x24, 0x30, 0x34, 0x5B, 0x80, 0x9A, 0xAB, 0xC2, 0xDD, 0xE2, 0xFB) with comprehensive tests.
 
+## Reference Documentation
+**Location:** `docs/` folder contains comprehensive hardware references
+**CPU:** `docs/cpu/65C816-opcodes.md` - All 256 opcodes, addressing modes, registers, flags, timing
+**APU:** `docs/apu/SPC700-opcodes.md` - SPC700 instruction set, memory map, registers, timers
+**APU:** `docs/apu/DSP-registers.md` - S-DSP registers, voice control, ADSR/GAIN, echo system
+**PPU:** `docs/ppu/registers.md` - S-PPU1/S-PPU2 registers, all 8 BG modes, sprites, Mode 7, color math
+**Usage:** Consult these docs when implementing new opcodes, registers, or hardware features
+**See:** `docs/README.md` for documentation structure and implementation guidelines
+
 ## Workflow for Changes
 1. `npm install` (if needed) → 2. Edit code → 3. `npm test` → 4. `npm run lint` → 5. `npm run build`
 
