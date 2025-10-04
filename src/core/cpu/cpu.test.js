@@ -1003,4 +1003,498 @@ describe('CPU', () => {
       });
     });
   });
+
+  describe('New Opcodes', () => {
+    describe('Arithmetic Operations', () => {
+      it('should execute ADC with direct page (0x65)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0x10;
+        cpu.D = 0x0000;
+        cpu.setFlag(CPUFlags.CARRY, false);
+        memory.write(0x8000, 0x65); // ADC dp
+        memory.write(0x8001, 0x50);
+        memory.write(0x0050, 0x05);
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x15);
+        expect(cpu.getFlag(CPUFlags.CARRY)).toBe(false);
+      });
+
+      it('should execute SBC with immediate (0xE9)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0x10;
+        cpu.setFlag(CPUFlags.CARRY, true);
+        memory.write(0x8000, 0xE9); // SBC #const
+        memory.write(0x8001, 0x05);
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x0B);
+      });
+    });
+
+    describe('Logical Operations', () => {
+      it('should execute AND with direct page (0x25)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0xFF;
+        cpu.D = 0x0000;
+        memory.write(0x8000, 0x25); // AND dp
+        memory.write(0x8001, 0x50);
+        memory.write(0x0050, 0x0F);
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x0F);
+      });
+
+      it('should execute ORA with immediate (0x09)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0x0F;
+        memory.write(0x8000, 0x09); // ORA #const
+        memory.write(0x8001, 0xF0);
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0xFF);
+      });
+
+      it('should execute EOR with immediate (0x49)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0xFF;
+        memory.write(0x8000, 0x49); // EOR #const
+        memory.write(0x8001, 0x0F);
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0xF0);
+      });
+    });
+
+    describe('Comparison Operations', () => {
+      it('should execute CMP with immediate (0xC9)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0x10;
+        memory.write(0x8000, 0xC9); // CMP #const
+        memory.write(0x8001, 0x10);
+        
+        cpu.step();
+        
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(true);
+        expect(cpu.getFlag(CPUFlags.CARRY)).toBe(true);
+      });
+
+      it('should execute CPX with immediate (0xE0)', () => {
+        cpu.PC = 0x8000;
+        cpu.X = 0x10;
+        memory.write(0x8000, 0xE0); // CPX #const
+        memory.write(0x8001, 0x05);
+        
+        cpu.step();
+        
+        expect(cpu.getFlag(CPUFlags.CARRY)).toBe(true);
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(false);
+      });
+
+      it('should execute CPY with immediate (0xC0)', () => {
+        cpu.PC = 0x8000;
+        cpu.Y = 0x05;
+        memory.write(0x8000, 0xC0); // CPY #const
+        memory.write(0x8001, 0x10);
+        
+        cpu.step();
+        
+        expect(cpu.getFlag(CPUFlags.CARRY)).toBe(false);
+        expect(cpu.getFlag(CPUFlags.NEGATIVE)).toBe(true);
+      });
+    });
+
+    describe('Shift and Rotate Operations', () => {
+      it('should execute ASL accumulator (0x0A)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0x40;
+        memory.write(0x8000, 0x0A); // ASL A
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x80);
+        expect(cpu.getFlag(CPUFlags.CARRY)).toBe(false);
+        expect(cpu.getFlag(CPUFlags.NEGATIVE)).toBe(true);
+      });
+
+      it('should execute LSR accumulator (0x4A)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0x03;
+        memory.write(0x8000, 0x4A); // LSR A
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x01);
+        expect(cpu.getFlag(CPUFlags.CARRY)).toBe(true);
+      });
+
+      it('should execute ROL accumulator (0x2A)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0x40;
+        cpu.setFlag(CPUFlags.CARRY, true);
+        memory.write(0x8000, 0x2A); // ROL A
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x81);
+        expect(cpu.getFlag(CPUFlags.CARRY)).toBe(false);
+      });
+
+      it('should execute ROR accumulator (0x6A)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0x03;
+        cpu.setFlag(CPUFlags.CARRY, true);
+        memory.write(0x8000, 0x6A); // ROR A
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x81);
+        expect(cpu.getFlag(CPUFlags.CARRY)).toBe(true);
+      });
+    });
+
+    describe('Increment and Decrement', () => {
+      it('should execute INC accumulator (0x1A)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0x10;
+        memory.write(0x8000, 0x1A); // INC A
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x11);
+      });
+
+      it('should execute DEC accumulator (0x3A)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0x10;
+        memory.write(0x8000, 0x3A); // DEC A
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x0F);
+      });
+
+      it('should execute INX (0xE8)', () => {
+        cpu.PC = 0x8000;
+        cpu.X = 0x10;
+        memory.write(0x8000, 0xE8); // INX
+        
+        cpu.step();
+        
+        expect(cpu.X).toBe(0x11);
+      });
+
+      it('should execute DEX (0xCA)', () => {
+        cpu.PC = 0x8000;
+        cpu.X = 0x10;
+        memory.write(0x8000, 0xCA); // DEX
+        
+        cpu.step();
+        
+        expect(cpu.X).toBe(0x0F);
+      });
+
+      it('should execute INY (0xC8)', () => {
+        cpu.PC = 0x8000;
+        cpu.Y = 0x10;
+        memory.write(0x8000, 0xC8); // INY
+        
+        cpu.step();
+        
+        expect(cpu.Y).toBe(0x11);
+      });
+
+      it('should execute DEY (0x88)', () => {
+        cpu.PC = 0x8000;
+        cpu.Y = 0x10;
+        memory.write(0x8000, 0x88); // DEY
+        
+        cpu.step();
+        
+        expect(cpu.Y).toBe(0x0F);
+      });
+    });
+
+    describe('Branch Instructions', () => {
+      it('should execute BPL when positive (0x10)', () => {
+        cpu.PC = 0x8000;
+        cpu.setFlag(CPUFlags.NEGATIVE, false);
+        memory.write(0x8000, 0x10); // BPL
+        memory.write(0x8001, 0x05);
+        
+        cpu.step();
+        
+        expect(cpu.PC).toBe(0x8007); // 0x8002 + 0x05
+      });
+
+      it('should execute BCC when carry clear (0x90)', () => {
+        cpu.PC = 0x8000;
+        cpu.setFlag(CPUFlags.CARRY, false);
+        memory.write(0x8000, 0x90); // BCC
+        memory.write(0x8001, 0x10);
+        
+        cpu.step();
+        
+        expect(cpu.PC).toBe(0x8012);
+      });
+
+      it('should execute BCS when carry set (0xB0)', () => {
+        cpu.PC = 0x8000;
+        cpu.setFlag(CPUFlags.CARRY, true);
+        memory.write(0x8000, 0xB0); // BCS
+        memory.write(0x8001, 0x10);
+        
+        cpu.step();
+        
+        expect(cpu.PC).toBe(0x8012);
+      });
+
+      it('should execute BEQ when zero (0xF0)', () => {
+        cpu.PC = 0x8000;
+        cpu.setFlag(CPUFlags.ZERO, true);
+        memory.write(0x8000, 0xF0); // BEQ
+        memory.write(0x8001, 0x10);
+        
+        cpu.step();
+        
+        expect(cpu.PC).toBe(0x8012);
+      });
+
+      it('should execute BNE when not zero (0xD0)', () => {
+        cpu.PC = 0x8000;
+        cpu.setFlag(CPUFlags.ZERO, false);
+        memory.write(0x8000, 0xD0); // BNE
+        memory.write(0x8001, 0x10);
+        
+        cpu.step();
+        
+        expect(cpu.PC).toBe(0x8012);
+      });
+    });
+
+    describe('Stack Operations', () => {
+      it('should execute PHP (0x08)', () => {
+        cpu.PC = 0x8000;
+        cpu.P = 0xAB;
+        const initialS = cpu.S;
+        memory.write(0x8000, 0x08); // PHP
+        
+        cpu.step();
+        
+        expect(cpu.S).toBe(initialS - 1);
+        expect(memory.read(initialS)).toBe(0xAB);
+      });
+
+      it('should execute PLP (0x28)', () => {
+        cpu.PC = 0x8000;
+        cpu.push8(0xAB);
+        memory.write(0x8000, 0x28); // PLP
+        
+        cpu.step();
+        
+        expect(cpu.P).toBe(0xAB);
+      });
+
+      it('should execute PHX (0xDA)', () => {
+        cpu.PC = 0x8000;
+        cpu.X = 0x42;
+        const initialS = cpu.S;
+        memory.write(0x8000, 0xDA); // PHX
+        
+        cpu.step();
+        
+        expect(cpu.S).toBe(initialS - 1);
+      });
+
+      it('should execute PLX (0xFA)', () => {
+        cpu.PC = 0x8000;
+        cpu.push8(0x42);
+        memory.write(0x8000, 0xFA); // PLX
+        
+        cpu.step();
+        
+        expect(cpu.X).toBe(0x42);
+      });
+
+      it('should execute PHY (0x5A)', () => {
+        cpu.PC = 0x8000;
+        cpu.Y = 0x42;
+        const initialS = cpu.S;
+        memory.write(0x8000, 0x5A); // PHY
+        
+        cpu.step();
+        
+        expect(cpu.S).toBe(initialS - 1);
+      });
+
+      it('should execute PLY (0x7A)', () => {
+        cpu.PC = 0x8000;
+        cpu.push8(0x42);
+        memory.write(0x8000, 0x7A); // PLY
+        
+        cpu.step();
+        
+        expect(cpu.Y).toBe(0x42);
+      });
+    });
+
+    describe('Transfer Operations', () => {
+      it('should execute TCS (0x1B)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0x1FFF;
+        cpu.emulationMode = false;
+        memory.write(0x8000, 0x1B); // TCS
+        
+        cpu.step();
+        
+        expect(cpu.S).toBe(0x1FFF);
+      });
+
+      it('should execute TSC (0x3B)', () => {
+        cpu.PC = 0x8000;
+        cpu.S = 0x1FFF;
+        memory.write(0x8000, 0x3B); // TSC
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x1FFF);
+      });
+
+      it('should execute TDC (0x7B)', () => {
+        cpu.PC = 0x8000;
+        cpu.D = 0x1000;
+        memory.write(0x8000, 0x7B); // TDC
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x1000);
+      });
+
+      it('should execute TXY (0x9B)', () => {
+        cpu.PC = 0x8000;
+        cpu.X = 0x42;
+        memory.write(0x8000, 0x9B); // TXY
+        
+        cpu.step();
+        
+        expect(cpu.Y).toBe(0x42);
+      });
+
+      it('should execute TYX (0xBB)', () => {
+        cpu.PC = 0x8000;
+        cpu.Y = 0x42;
+        memory.write(0x8000, 0xBB); // TYX
+        
+        cpu.step();
+        
+        expect(cpu.X).toBe(0x42);
+      });
+
+      it('should execute TSX (0xBA)', () => {
+        cpu.PC = 0x8000;
+        cpu.S = 0x1FF;
+        memory.write(0x8000, 0xBA); // TSX
+        
+        cpu.step();
+        
+        expect(cpu.X).toBe(0xFF);
+      });
+    });
+
+    describe('Store Zero Operations', () => {
+      it('should execute STZ direct page (0x64)', () => {
+        cpu.PC = 0x8000;
+        cpu.D = 0x0000;
+        memory.write(0x8000, 0x64); // STZ dp
+        memory.write(0x8001, 0x50);
+        memory.write(0x0050, 0xFF);
+        
+        cpu.step();
+        
+        expect(memory.read(0x0050)).toBe(0x00);
+      });
+
+      it('should execute STZ absolute (0x9C)', () => {
+        cpu.PC = 0x8000;
+        memory.write(0x8000, 0x9C); // STZ addr
+        memory.write16(0x8001, 0x2000);
+        memory.write(0x2000, 0xFF);
+        
+        cpu.step();
+        
+        expect(memory.read(0x2000)).toBe(0x00);
+      });
+    });
+
+    describe('Bit Test Operations', () => {
+      it('should execute BIT absolute (0x2C)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0x0F;
+        memory.write(0x8000, 0x2C); // BIT addr
+        memory.write16(0x8001, 0x2000);
+        memory.write(0x2000, 0xF0);
+        
+        cpu.step();
+        
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(true);
+        expect(cpu.getFlag(CPUFlags.NEGATIVE)).toBe(true);
+        expect(cpu.getFlag(CPUFlags.OVERFLOW)).toBe(true);
+      });
+
+      it('should execute TSB (0x0C)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0x0F;
+        memory.write(0x8000, 0x0C); // TSB addr
+        memory.write16(0x8001, 0x2000);
+        memory.write(0x2000, 0xF0);
+        
+        cpu.step();
+        
+        expect(memory.read(0x2000)).toBe(0xFF);
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(true);
+      });
+
+      it('should execute TRB (0x1C)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0x0F;
+        memory.write(0x8000, 0x1C); // TRB addr
+        memory.write16(0x8001, 0x2000);
+        memory.write(0x2000, 0xFF);
+        
+        cpu.step();
+        
+        expect(memory.read(0x2000)).toBe(0xF0);
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(false);
+      });
+    });
+
+    describe('Special Operations', () => {
+      it('should execute XBA (0xEB)', () => {
+        cpu.PC = 0x8000;
+        cpu.A = 0x1234;
+        memory.write(0x8000, 0xEB); // XBA
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x3412);
+      });
+
+      it('should execute RTL (0x6B)', () => {
+        cpu.PC = 0x8000;
+        cpu.push8(0x02); // Bank
+        cpu.push16(0x9FFF); // Address
+        memory.write(0x8000, 0x6B); // RTL
+        
+        cpu.step();
+        
+        expect(cpu.PC).toBe(0xA000); // 0x9FFF + 1
+        expect(cpu.PBR).toBe(0x02);
+      });
+    });
+  });
 });
