@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JSNES - SNES Emulator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎮 JSNES - SNES Emulator</h1>
+      <p class="subtitle">Super Nintendo Entertainment System in JavaScript</p>
+    </header>
+
+    <main>
+      <div class="screen-container">
+        <canvas id="screen"></canvas>
+        <div class="overlay" id="loadingOverlay">
+          <p>Load a ROM to start playing</p>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="control-group">
+          <input type="file" id="romInput" accept=".smc,.sfc,.rom" style="display: none;">
+          <button id="loadBtn" class="btn btn-primary">Load ROM</button>
+          <button id="startBtn" class="btn" disabled>Start</button>
+          <button id="resetBtn" class="btn" disabled>Reset</button>
+        </div>
+
+        <div class="control-group">
+          <button id="saveStateBtn" class="btn btn-secondary" disabled>Save State</button>
+          <button id="saveSRAMBtn" class="btn btn-secondary" disabled>Save SRAM</button>
+        </div>
+
+        <div class="stats">
+          <span id="fps">FPS: 0</span>
+        </div>
+      </div>
+
+      <div class="info-section">
+        <h2>Controls</h2>
+        <div class="controls-grid">
+          <div class="control-item">
+            <span class="key">Arrow Keys</span>
+            <span class="action">D-Pad</span>
+          </div>
+          <div class="control-item">
+            <span class="key">Z</span>
+            <span class="action">B Button</span>
+          </div>
+          <div class="control-item">
+            <span class="key">X</span>
+            <span class="action">A Button</span>
+          </div>
+          <div class="control-item">
+            <span class="key">A</span>
+            <span class="action">Y Button</span>
+          </div>
+          <div class="control-item">
+            <span class="key">S</span>
+            <span class="action">X Button</span>
+          </div>
+          <div class="control-item">
+            <span class="key">Q</span>
+            <span class="action">L Button</span>
+          </div>
+          <div class="control-item">
+            <span class="key">W</span>
+            <span class="action">R Button</span>
+          </div>
+          <div class="control-item">
+            <span class="key">Enter</span>
+            <span class="action">Start</span>
+          </div>
+          <div class="control-item">
+            <span class="key">Shift</span>
+            <span class="action">Select</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="info-section">
+        <h2>Features</h2>
+        <ul>
+          <li>✅ Full 65C816 CPU emulation</li>
+          <li>✅ PPU with all background modes (0-7)</li>
+          <li>✅ APU audio support (SPC700 + DSP)</li>
+          <li>✅ LoROM and HiROM mapper support</li>
+          <li>✅ Save states and SRAM saving</li>
+          <li>✅ Runs in Web Worker for smooth performance</li>
+        </ul>
+      </div>
+
+      <div class="info-section">
+        <h2>How to Use</h2>
+        <ol>
+          <li>Click "Load ROM" and select a SNES ROM file (.smc, .sfc, or .rom)</li>
+          <li>Click "Start" to begin emulation</li>
+          <li>Use keyboard controls to play</li>
+          <li>Click "Save State" to save your progress</li>
+          <li>Click "Save SRAM" to export cartridge save data</li>
+        </ol>
+      </div>
+    </main>
+
+    <footer>
+      <p>Built with modern JavaScript (ES2022) | <a href="https://github.com/the-exodus/jsnes" target="_blank">View on GitHub</a></p>
+    </footer>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
