@@ -472,4 +472,535 @@ describe('CPU', () => {
       expect(cpu.PC).toBe(0x8001);
     });
   });
+
+  describe('New Opcodes', () => {
+    describe('BRK - 0x00', () => {
+      it('should break and jump to interrupt vector', () => {
+        cpu.PC = 0x8000;
+        memory.write16(0xFFFE, 0x9000); // BRK vector in emulation mode
+        memory.write(0x8000, 0x00); // BRK
+        memory.write(0x8001, 0x00); // Signature byte
+        
+        cpu.step();
+        
+        expect(cpu.PC).toBe(0x9000);
+        expect(cpu.getFlag(CPUFlags.IRQ_DISABLE)).toBe(true);
+      });
+    });
+
+    describe('ORA (dp,X) - 0x01', () => {
+      it('should OR accumulator with memory at indirect address', () => {
+        cpu.A = 0x0F;
+        cpu.X = 0x02;
+        cpu.D = 0x0000;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x01); // ORA (dp,X)
+        memory.write(0x8001, 0x10); // dp = 0x10
+        memory.write16(0x0012, 0x2000); // Pointer at dp+X
+        memory.write(0x2000, 0xF0); // Value to OR
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0xFF);
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(false);
+        expect(cpu.getFlag(CPUFlags.NEGATIVE)).toBe(true);
+      });
+    });
+
+    describe('COP - 0x02', () => {
+      it('should trigger co-processor interrupt', () => {
+        cpu.PC = 0x8000;
+        memory.write16(0xFFF4, 0x9000); // COP vector in emulation mode
+        memory.write(0x8000, 0x02); // COP
+        memory.write(0x8001, 0x00); // Signature byte
+        
+        cpu.step();
+        
+        expect(cpu.PC).toBe(0x9000);
+        expect(cpu.getFlag(CPUFlags.IRQ_DISABLE)).toBe(true);
+      });
+    });
+
+    describe('ASL absolute - 0x0E', () => {
+      it('should shift memory left', () => {
+        cpu.PC = 0x8000;
+        memory.write(0x8000, 0x0E); // ASL absolute
+        memory.write16(0x8001, 0x2000);
+        memory.write(0x2000, 0x42);
+        
+        cpu.step();
+        
+        expect(memory.read(0x2000)).toBe(0x84);
+        expect(cpu.getFlag(CPUFlags.CARRY)).toBe(false);
+        expect(cpu.getFlag(CPUFlags.NEGATIVE)).toBe(true);
+      });
+
+      it('should set carry flag when bit 7 is set', () => {
+        cpu.PC = 0x8000;
+        memory.write(0x8000, 0x0E);
+        memory.write16(0x8001, 0x2000);
+        memory.write(0x2000, 0x81);
+        
+        cpu.step();
+        
+        expect(memory.read(0x2000)).toBe(0x02);
+        expect(cpu.getFlag(CPUFlags.CARRY)).toBe(true);
+      });
+    });
+
+    describe('JSL - 0x22', () => {
+      it('should jump to long address and save return address', () => {
+        cpu.PC = 0x8000;
+        cpu.PBR = 0x01;
+        cpu.S = 0x01FF;
+        
+        memory.write(0x8000, 0x22); // JSL
+        memory.write16(0x8001, 0x5000); // Target address
+        memory.write(0x8003, 0x02); // Target bank
+        
+        cpu.step();
+        
+        expect(cpu.PC).toBe(0x5000);
+        expect(cpu.PBR).toBe(0x02);
+        // Check return address on stack
+        expect(cpu.pop16()).toBe(0x8004);
+        expect(cpu.pop8()).toBe(0x01);
+      });
+    });
+
+    describe('BIT zeropage - 0x24', () => {
+      it('should test bits without modifying accumulator', () => {
+        cpu.A = 0x0F;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x24); // BIT zp
+        memory.write(0x8001, 0x10);
+        memory.write(0x0010, 0xC0); // Bits 7 and 6 set
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x0F); // Unchanged
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(true); // 0x0F & 0xC0 = 0
+        expect(cpu.getFlag(CPUFlags.NEGATIVE)).toBe(true); // Bit 7 of memory
+        expect(cpu.getFlag(CPUFlags.OVERFLOW)).toBe(true); // Bit 6 of memory
+      });
+    });
+
+    describe('BMI - 0x30', () => {
+      it('should branch when negative flag is set', () => {
+        cpu.PC = 0x8000;
+        cpu.setFlag(CPUFlags.NEGATIVE, true);
+        
+        memory.write(0x8000, 0x30); // BMI
+        memory.write(0x8001, 0x10); // +16 offset
+        
+        cpu.step();
+        
+        expect(cpu.PC).toBe(0x8012);
+      });
+
+      it('should not branch when negative flag is clear', () => {
+        cpu.PC = 0x8000;
+        cpu.setFlag(CPUFlags.NEGATIVE, false);
+        
+        memory.write(0x8000, 0x30); // BMI
+        memory.write(0x8001, 0x10);
+        
+        cpu.step();
+        
+        expect(cpu.PC).toBe(0x8002);
+      });
+
+      it('should handle negative offsets', () => {
+        cpu.PC = 0x8000;
+        cpu.setFlag(CPUFlags.NEGATIVE, true);
+        
+        memory.write(0x8000, 0x30); // BMI
+        memory.write(0x8001, 0xF0); // -16 offset
+        
+        cpu.step();
+        
+        expect(cpu.PC).toBe(0x7FF2);
+      });
+    });
+
+    describe('BRA - 0x80', () => {
+      it('should always branch forward', () => {
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x80); // BRA
+        memory.write(0x8001, 0x20); // +32 offset
+        
+        cpu.step();
+        
+        expect(cpu.PC).toBe(0x8022);
+      });
+
+      it('should always branch backward', () => {
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x80); // BRA
+        memory.write(0x8001, 0xFE); // -2 offset
+        
+        cpu.step();
+        
+        expect(cpu.PC).toBe(0x8000);
+      });
+    });
+
+    describe('TXS - 0x9A', () => {
+      it('should transfer X to stack pointer in emulation mode', () => {
+        cpu.emulationMode = true;
+        cpu.X = 0x45;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x9A); // TXS
+        
+        cpu.step();
+        
+        expect(cpu.S).toBe(0x0145);
+      });
+
+      it('should transfer X to stack pointer in native mode', () => {
+        cpu.emulationMode = false;
+        cpu.X = 0x1234;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x9A); // TXS
+        
+        cpu.step();
+        
+        expect(cpu.S).toBe(0x1234);
+      });
+    });
+
+    describe('PLB - 0xAB', () => {
+      it('should pull data bank register from stack', () => {
+        cpu.PC = 0x8000;
+        cpu.push8(0x42);
+        
+        memory.write(0x8000, 0xAB); // PLB
+        
+        cpu.step();
+        
+        expect(cpu.DBR).toBe(0x42);
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(false);
+        expect(cpu.getFlag(CPUFlags.NEGATIVE)).toBe(false);
+      });
+
+      it('should set zero flag when pulling zero', () => {
+        cpu.PC = 0x8000;
+        cpu.push8(0x00);
+        
+        memory.write(0x8000, 0xAB);
+        
+        cpu.step();
+        
+        expect(cpu.DBR).toBe(0x00);
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(true);
+      });
+    });
+
+    describe('REP - 0xC2', () => {
+      it('should reset processor status bits', () => {
+        cpu.PC = 0x8000;
+        cpu.P = 0xFF; // All flags set
+        
+        memory.write(0x8000, 0xC2); // REP
+        memory.write(0x8001, 0x30); // Clear MEMORY_8BIT and INDEX_8BIT
+        
+        cpu.step();
+        
+        expect(cpu.getFlag(CPUFlags.MEMORY_8BIT)).toBe(false);
+        expect(cpu.getFlag(CPUFlags.INDEX_8BIT)).toBe(false);
+        expect(cpu.getFlag(CPUFlags.CARRY)).toBe(true); // Others unchanged
+      });
+    });
+
+    describe('CMP absolute,X - 0xDD', () => {
+      it('should compare accumulator with memory', () => {
+        cpu.A = 0x50;
+        cpu.X = 0x02;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0xDD); // CMP abs,X
+        memory.write16(0x8001, 0x2000);
+        memory.write(0x2002, 0x30);
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x50); // Unchanged
+        expect(cpu.getFlag(CPUFlags.CARRY)).toBe(true); // A >= M
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(false);
+      });
+
+      it('should set zero flag when equal', () => {
+        cpu.A = 0x42;
+        cpu.X = 0x00;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0xDD);
+        memory.write16(0x8001, 0x2000);
+        memory.write(0x2000, 0x42);
+        
+        cpu.step();
+        
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(true);
+        expect(cpu.getFlag(CPUFlags.CARRY)).toBe(true);
+      });
+    });
+
+    describe('SEP - 0xE2', () => {
+      it('should set processor status bits', () => {
+        cpu.PC = 0x8000;
+        cpu.P = 0x00; // All flags clear
+        
+        memory.write(0x8000, 0xE2); // SEP
+        memory.write(0x8001, 0x30); // Set MEMORY_8BIT and INDEX_8BIT
+        
+        cpu.step();
+        
+        expect(cpu.getFlag(CPUFlags.MEMORY_8BIT)).toBe(true);
+        expect(cpu.getFlag(CPUFlags.INDEX_8BIT)).toBe(true);
+      });
+    });
+
+    describe('TCD - 0x5B', () => {
+      it('should transfer accumulator to direct page register', () => {
+        cpu.A = 0x1234;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x5B); // TCD
+        
+        cpu.step();
+        
+        expect(cpu.D).toBe(0x1234);
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(false);
+      });
+
+      it('should set zero flag when accumulator is zero', () => {
+        cpu.A = 0x0000;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x5B);
+        
+        cpu.step();
+        
+        expect(cpu.D).toBe(0x0000);
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(true);
+      });
+
+      it('should set negative flag when bit 15 is set', () => {
+        cpu.A = 0x8000;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x5B);
+        
+        cpu.step();
+        
+        expect(cpu.D).toBe(0x8000);
+        expect(cpu.getFlag(CPUFlags.NEGATIVE)).toBe(true);
+      });
+    });
+
+    describe('XCE - 0xFB', () => {
+      it('should exchange carry and emulation mode flags', () => {
+        cpu.emulationMode = true;
+        cpu.setFlag(CPUFlags.CARRY, false);
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0xFB); // XCE
+        
+        cpu.step();
+        
+        expect(cpu.emulationMode).toBe(false);
+        expect(cpu.getFlag(CPUFlags.CARRY)).toBe(true);
+      });
+
+      it('should set 8-bit mode when entering emulation mode', () => {
+        cpu.emulationMode = false;
+        cpu.setFlag(CPUFlags.CARRY, true);
+        cpu.setFlag(CPUFlags.MEMORY_8BIT, false);
+        cpu.setFlag(CPUFlags.INDEX_8BIT, false);
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0xFB);
+        
+        cpu.step();
+        
+        expect(cpu.emulationMode).toBe(true);
+        expect(cpu.getFlag(CPUFlags.CARRY)).toBe(false);
+        expect(cpu.getFlag(CPUFlags.MEMORY_8BIT)).toBe(true);
+        expect(cpu.getFlag(CPUFlags.INDEX_8BIT)).toBe(true);
+      });
+
+      it('should truncate stack pointer to page 1 in emulation mode', () => {
+        cpu.emulationMode = false;
+        cpu.setFlag(CPUFlags.CARRY, true);
+        cpu.S = 0x1234;
+        cpu.X = 0x5678;
+        cpu.Y = 0x9ABC;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0xFB);
+        
+        cpu.step();
+        
+        expect(cpu.S).toBe(0x0134);
+        expect(cpu.X).toBe(0x78);
+        expect(cpu.Y).toBe(0xBC);
+      });
+    });
+
+    describe('ORA sr,S - 0x03', () => {
+      it('should OR accumulator with stack relative memory', () => {
+        cpu.A = 0x0F;
+        cpu.S = 0x01F0;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x03); // ORA sr,S
+        memory.write(0x8001, 0x10); // Offset +16
+        memory.write(0x0200, 0xF0); // Value at S+offset
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0xFF);
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(false);
+        expect(cpu.getFlag(CPUFlags.NEGATIVE)).toBe(true);
+      });
+
+      it('should set zero flag when result is zero', () => {
+        cpu.A = 0x00;
+        cpu.S = 0x0100;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x03);
+        memory.write(0x8001, 0x05);
+        memory.write(0x0105, 0x00);
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x00);
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(true);
+      });
+
+      it('should work with different stack offsets', () => {
+        cpu.A = 0x01;
+        cpu.S = 0x01FF;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x03);
+        memory.write(0x8001, 0x01); // Offset +1
+        memory.write(0x0200, 0x02);
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x03);
+      });
+
+      it('should handle stack pointer wrap around', () => {
+        cpu.A = 0x10;
+        cpu.S = 0x01FE;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x03);
+        memory.write(0x8001, 0xFF); // Large offset
+        memory.write(0x02FD, 0x20);
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x30);
+      });
+    });
+
+    describe('BIT dp,X - 0x34', () => {
+      it('should test bits without modifying accumulator', () => {
+        cpu.A = 0x0F;
+        cpu.X = 0x05;
+        cpu.D = 0x0000;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x34); // BIT dp,X
+        memory.write(0x8001, 0x10); // dp = 0x10
+        memory.write(0x0015, 0xC0); // Value at dp+X, bits 7 and 6 set
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x0F); // Unchanged
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(true); // 0x0F & 0xC0 = 0
+        expect(cpu.getFlag(CPUFlags.NEGATIVE)).toBe(true); // Bit 7 of memory
+        expect(cpu.getFlag(CPUFlags.OVERFLOW)).toBe(true); // Bit 6 of memory
+      });
+
+      it('should clear zero flag when bits match', () => {
+        cpu.A = 0xFF;
+        cpu.X = 0x00;
+        cpu.D = 0x0000;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x34);
+        memory.write(0x8001, 0x20);
+        memory.write(0x0020, 0x42);
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0xFF);
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(false); // 0xFF & 0x42 != 0
+        expect(cpu.getFlag(CPUFlags.OVERFLOW)).toBe(true); // Bit 6 set
+        expect(cpu.getFlag(CPUFlags.NEGATIVE)).toBe(false); // Bit 7 clear
+      });
+
+      it('should work with non-zero direct page register', () => {
+        cpu.A = 0xFF;
+        cpu.X = 0x02;
+        cpu.D = 0x0100; // Non-zero direct page
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x34);
+        memory.write(0x8001, 0x10);
+        memory.write(0x0112, 0x80); // At D+dp+X = 0x0100+0x10+0x02
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0xFF);
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(false);
+        expect(cpu.getFlag(CPUFlags.NEGATIVE)).toBe(true);
+        expect(cpu.getFlag(CPUFlags.OVERFLOW)).toBe(false);
+      });
+
+      it('should clear all test flags when memory is zero', () => {
+        cpu.A = 0xFF;
+        cpu.X = 0x00;
+        cpu.D = 0x0000;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x34);
+        memory.write(0x8001, 0x30);
+        memory.write(0x0030, 0x00);
+        
+        cpu.step();
+        
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(true);
+        expect(cpu.getFlag(CPUFlags.OVERFLOW)).toBe(false);
+        expect(cpu.getFlag(CPUFlags.NEGATIVE)).toBe(false);
+      });
+
+      it('should handle X register wrap in 8-bit mode', () => {
+        cpu.A = 0x01;
+        cpu.X = 0xFF; // Will be masked to 0xFF
+        cpu.D = 0x0000;
+        cpu.PC = 0x8000;
+        
+        memory.write(0x8000, 0x34);
+        memory.write(0x8001, 0x01);
+        memory.write(0x0100, 0x01); // At dp+X = 0x01+0xFF (wraps in direct page)
+        
+        cpu.step();
+        
+        expect(cpu.A).toBe(0x01);
+        expect(cpu.getFlag(CPUFlags.ZERO)).toBe(false);
+      });
+    });
+  });
 });

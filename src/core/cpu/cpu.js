@@ -512,6 +512,226 @@ export class CPU {
       this.cycles += 6;
     };
     
+    // BRK - Software Break
+    table[0x00] = function() {
+      this.PC = (this.PC + 1) & 0xFFFF; // Skip signature byte
+      this.push8(this.PBR);
+      this.push16(this.PC);
+      this.push8(this.P);
+      this.setFlag(CPUFlags.IRQ_DISABLE, true);
+      this.setFlag(CPUFlags.DECIMAL, false);
+      const vector = this.emulationMode ? 0xFFFE : 0xFFE6;
+      this.PC = this.memory.read16(vector);
+      this.PBR = 0;
+      this.cycles += 7;
+    };
+    
+    // ORA (dp,X) - OR with Accumulator Direct Page Indexed Indirect
+    table[0x01] = function() {
+      const addr = this.directPageIndexedIndirectX();
+      const value = this.memory.read(addr);
+      this.A |= value;
+      this.setFlag(CPUFlags.ZERO, this.A === 0);
+      this.setFlag(CPUFlags.NEGATIVE, (this.A & 0x80) !== 0);
+      this.cycles += 6;
+    };
+    
+    // COP - Co-Processor
+    table[0x02] = function() {
+      this.PC = (this.PC + 1) & 0xFFFF; // Skip signature byte
+      this.push8(this.PBR);
+      this.push16(this.PC);
+      this.push8(this.P);
+      this.setFlag(CPUFlags.IRQ_DISABLE, true);
+      this.setFlag(CPUFlags.DECIMAL, false);
+      const vector = this.emulationMode ? 0xFFF4 : 0xFFE4;
+      this.PC = this.memory.read16(vector);
+      this.PBR = 0;
+      this.cycles += 7;
+    };
+    
+    // ASL absolute - Arithmetic Shift Left
+    table[0x0E] = function() {
+      const addr = this.absolute();
+      let value = this.memory.read(addr);
+      this.setFlag(CPUFlags.CARRY, (value & 0x80) !== 0);
+      value = (value << 1) & 0xFF;
+      this.memory.write(addr, value);
+      this.setFlag(CPUFlags.ZERO, value === 0);
+      this.setFlag(CPUFlags.NEGATIVE, (value & 0x80) !== 0);
+      this.cycles += 6;
+    };
+    
+    // JSL - Jump to Subroutine Long
+    table[0x22] = function() {
+      const targetLow = this.read16(this.PC);
+      this.PC = (this.PC + 2) & 0xFFFF;
+      const targetBank = this.read8(this.PC);
+      this.PC = (this.PC + 1) & 0xFFFF;
+      
+      this.push8(this.PBR);
+      this.push16(this.PC);
+      
+      this.PBR = targetBank;
+      this.PC = targetLow;
+      this.cycles += 8;
+    };
+    
+    // BIT zeropage - Test Bits
+    table[0x24] = function() {
+      const addr = this.zeroPage();
+      const value = this.memory.read(addr);
+      const result = this.A & value;
+      this.setFlag(CPUFlags.ZERO, result === 0);
+      this.setFlag(CPUFlags.OVERFLOW, (value & 0x40) !== 0);
+      this.setFlag(CPUFlags.NEGATIVE, (value & 0x80) !== 0);
+      this.cycles += 3;
+    };
+    
+    // BMI - Branch if Minus/Negative
+    table[0x30] = function() {
+      const offset = this.read8(this.PC);
+      this.PC = (this.PC + 1) & 0xFFFF;
+      if (this.getFlag(CPUFlags.NEGATIVE)) {
+        const signedOffset = offset < 0x80 ? offset : offset - 0x100;
+        this.PC = (this.PC + signedOffset) & 0xFFFF;
+        this.cycles += 3;
+      } else {
+        this.cycles += 2;
+      }
+    };
+    
+    // BRA - Branch Always
+    table[0x80] = function() {
+      const offset = this.read8(this.PC);
+      this.PC = (this.PC + 1) & 0xFFFF;
+      const signedOffset = offset < 0x80 ? offset : offset - 0x100;
+      this.PC = (this.PC + signedOffset) & 0xFFFF;
+      this.cycles += 3;
+    };
+    
+    // TXS - Transfer X to Stack Pointer
+    table[0x9A] = function() {
+      if (this.emulationMode) {
+        this.S = 0x0100 | (this.X & 0xFF);
+      } else {
+        this.S = this.X;
+      }
+      this.cycles += 2;
+    };
+    
+    // PLB - Pull Data Bank Register
+    table[0xAB] = function() {
+      this.DBR = this.pop8();
+      this.setFlag(CPUFlags.ZERO, this.DBR === 0);
+      this.setFlag(CPUFlags.NEGATIVE, (this.DBR & 0x80) !== 0);
+      this.cycles += 4;
+    };
+    
+    // REP - Reset Processor Status Bits
+    table[0xC2] = function() {
+      const mask = this.read8(this.PC);
+      this.PC = (this.PC + 1) & 0xFFFF;
+      this.P &= ~mask;
+      this.cycles += 3;
+    };
+    
+    // CMP absolute,X - Compare Accumulator with Memory
+    table[0xDD] = function() {
+      const addr = this.absoluteX();
+      const value = this.memory.read(addr);
+      const result = this.A - value;
+      this.setFlag(CPUFlags.CARRY, this.A >= value);
+      this.setFlag(CPUFlags.ZERO, (result & 0xFF) === 0);
+      this.setFlag(CPUFlags.NEGATIVE, (result & 0x80) !== 0);
+      this.cycles += 4;
+    };
+    
+    // SEP - Set Processor Status Bits
+    table[0xE2] = function() {
+      const mask = this.read8(this.PC);
+      this.PC = (this.PC + 1) & 0xFFFF;
+      this.P |= mask;
+      this.cycles += 3;
+    };
+    
+    // TCD - Transfer Accumulator to Direct Page
+    table[0x5B] = function() {
+      this.D = this.A;
+      this.setFlag(CPUFlags.ZERO, this.D === 0);
+      this.setFlag(CPUFlags.NEGATIVE, (this.D & 0x8000) !== 0);
+      this.cycles += 2;
+    };
+    
+    // XCE - Exchange Carry and Emulation
+    table[0xFB] = function() {
+      const carry = this.getFlag(CPUFlags.CARRY);
+      this.setFlag(CPUFlags.CARRY, this.emulationMode);
+      this.emulationMode = carry;
+      
+      if (this.emulationMode) {
+        // Entering emulation mode
+        this.setFlag(CPUFlags.MEMORY_8BIT, true);
+        this.setFlag(CPUFlags.INDEX_8BIT, true);
+        this.S = 0x0100 | (this.S & 0xFF);
+        this.X &= 0xFF;
+        this.Y &= 0xFF;
+      }
+      this.cycles += 2;
+    };
+    
+    // ORA sr,S - OR with Accumulator (Stack Relative)
+    table[0x03] = function() {
+      const addr = this.stackRelative();
+      const value = this.memory.read(addr);
+      this.A |= value;
+      this.setFlag(CPUFlags.ZERO, this.A === 0);
+      this.setFlag(CPUFlags.NEGATIVE, (this.A & 0x80) !== 0);
+      this.cycles += 4;
+    };
+    
+    // BIT dp,X - Test Bits (Direct Page Indexed with X)
+    table[0x34] = function() {
+      const addr = this.directPageX();
+      const value = this.memory.read(addr);
+      const result = this.A & value;
+      this.setFlag(CPUFlags.ZERO, result === 0);
+      this.setFlag(CPUFlags.OVERFLOW, (value & 0x40) !== 0);
+      this.setFlag(CPUFlags.NEGATIVE, (value & 0x80) !== 0);
+      this.cycles += 4;
+    };
+    
     return table;
+  }
+  
+  /**
+   * Direct Page Indexed Indirect with X: (dp,X)
+   * Adds X to direct page address, then reads the 16-bit pointer
+   */
+  directPageIndexedIndirectX() {
+    const dp = this.read8(this.PC);
+    this.PC = (this.PC + 1) & 0xFFFF;
+    const addr = (this.D + dp + (this.X & 0xFF)) & 0xFFFF;
+    return this.memory.read16(addr);
+  }
+  
+  /**
+   * Stack Relative: sr,S
+   * Address is stack pointer plus 8-bit offset
+   */
+  stackRelative() {
+    const offset = this.read8(this.PC);
+    this.PC = (this.PC + 1) & 0xFFFF;
+    return (this.S + offset) & 0xFFFF;
+  }
+  
+  /**
+   * Direct Page Indexed with X: dp,X
+   * Address is direct page register plus dp offset plus X register
+   */
+  directPageX() {
+    const dp = this.read8(this.PC);
+    this.PC = (this.PC + 1) & 0xFFFF;
+    return (this.D + dp + (this.X & 0xFF)) & 0xFFFF;
   }
 }

@@ -7,7 +7,7 @@ JSNES is a SNES emulator in JavaScript (ES2022), ~4,000 lines. Runs in browser w
 ## Build & Test Workflow (Commands in Order)
 
 **1. Setup:** `npm install` (required first, ~10-15s)  
-**2. Test:** `npm test` (~1-2s, 154/154 pass), `npm run test:watch` (dev), `npm run test:coverage`  
+**2. Test:** `npm test` (~3s, 189/189 pass), `npm run test:watch` (dev), `npm run test:coverage`  
 **3. Lint:** `npm run lint` - All errors and warnings fixed! Code is clean.  
 **4. Build:** `npm run build` (~300-500ms to dist/), `npm run preview`  
 **5. Dev:** `npm run dev` (port 3000, auto-opens browser, HMR enabled) or press F5 in VS Code to launch & debug
@@ -26,11 +26,11 @@ JSNES is a SNES emulator in JavaScript (ES2022), ~4,000 lines. Runs in browser w
 ## Project Structure
 ```
 src/core/          # Emulation core (runs in Web Worker)
-  cpu/             # 65C816 CPU - cpu.js (517 lines), cpu.test.js (42 tests, 76% coverage)
+  cpu/             # 65C816 CPU - cpu.js (720 lines), cpu.test.js (77 tests, 80%+ coverage)
   ppu/             # Graphics PPU - ppu.js (479 lines), ppu.test.js (37 tests, 81% coverage)
   apu/             # Audio APU - apu.js (149 lines), apu.test.js (23 tests, 100% coverage)
-  memory/          # Memory & mappers - memory.js (343 lines), memory.test.js (27 tests, 92% coverage)
-  emulator.js      # Main coordinator (244 lines), emulator.test.js (25 tests, all passing)
+  memory/          # Memory & mappers - memory.js (356 lines), memory.test.js (27 tests, 95%+ coverage)
+  emulator.js      # Main coordinator (245 lines), emulator.test.js (25 tests, all passing)
 src/ui/            # Browser UI - renderer.js, audio.js, input.js (not tested)
 src/worker/        # emulator-worker.js (112 lines, Web Worker wrapper)
 src/main.js        # Entry point (342 lines)
@@ -56,8 +56,9 @@ package.json       # Scripts & dependencies
 - Test pattern: `describe('Name', () => { beforeEach(() => {...}); it('should...', () => {...}); });`
 
 ## Testing
-**Coverage:** CPU 76%, PPU 81%, APU 100%, Memory 92%, Emulator (all 154 tests pass)
+**Coverage:** CPU 80%+, PPU 81%, APU 100%, Memory 95%+, Emulator (all 189 tests pass)
 **New features:** Write tests alongside code, use `npm run test:watch`, aim for 80%+ coverage, test edge cases.
+**Recent additions:** 17 new opcodes implemented (0x00, 0x01, 0x02, 0x03, 0x0E, 0x22, 0x24, 0x30, 0x34, 0x5B, 0x80, 0x9A, 0xAB, 0xC2, 0xDD, 0xE2, 0xFB) with comprehensive tests.
 
 ## Workflow for Changes
 1. `npm install` (if needed) → 2. Edit code → 3. `npm test` → 4. `npm run lint` → 5. `npm run build`
