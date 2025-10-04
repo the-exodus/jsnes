@@ -117,9 +117,8 @@ export class Emulator {
       // Execute PPU (dot-based timing)
       // Simplified: Run PPU per scanline
       const scanlinesNeeded = Math.floor(cycles / 1364); // ~1364 cycles per scanline
-      const currentScanline = this.ppu.scanline;
       
-      while (this.ppu.scanline < currentScanline + scanlinesNeeded && this.ppu.scanline < 262) {
+      for (let i = 0; i < scanlinesNeeded; i++) {
         this.ppu.scanlineStep();
       }
     }
