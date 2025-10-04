@@ -8,19 +8,19 @@ JSNES is a SNES emulator in JavaScript (ES2022), ~4,000 lines. Runs in browser w
 
 **1. Setup:** `npm install` (required first, ~10-15s)  
 **2. Test:** `npm test` (~1-2s, 154/154 pass), `npm run test:watch` (dev), `npm run test:coverage`  
-**3. Lint:** `npm run lint` - Pre-existing errors: 2 in ppu.js:463 & main.js:101 (no-case-declarations), 7 warnings  
-**4. Build:** `npm run build` (~300-500ms to dist/), `npm run preview` - Always succeeds despite warnings  
-**5. Dev:** `npm run dev` (port 3000, auto-opens browser, HMR enabled)
+**3. Lint:** `npm run lint` - All errors and warnings fixed! Code is clean.  
+**4. Build:** `npm run build` (~300-500ms to dist/), `npm run preview`  
+**5. Dev:** `npm run dev` (port 3000, auto-opens browser, HMR enabled) or press F5 in VS Code to launch & debug
 
 **Key Points:**
 - ALWAYS `npm install` after cleaning node_modules
 - Tests run independently, no build required first
-- Do NOT fix pre-existing ESLint errors unless asked
 - All tests now pass including emulator tests (hang issue fixed)
+- ESLint now passes with zero errors/warnings
+- VS Code debug launch config available - press F5 to run and debug
 - ALWAYS update `copilot-instructions.md` if necessary after making changes to the project.
 
 ## Known Issues
-- **ESLint:** ppu.js:463 & main.js:101 errors pre-exist. Wrap declarations in braces if editing those switches.
 - **Build:** Independent from tests. Can build without testing first.
 
 ## Project Structure

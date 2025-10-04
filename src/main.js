@@ -96,7 +96,7 @@ class App {
       this.enableButton('resetBtn');
       break;
       
-    case 'frame':
+    case 'frame': {
       // Render frame
       const framebuffer = new Uint32Array(data.framebuffer);
       this.renderer.renderFrame(framebuffer);
@@ -109,6 +109,7 @@ class App {
       // Update stats
       this.updateStats();
       break;
+    }
       
     case 'error':
       this.showError(data);
