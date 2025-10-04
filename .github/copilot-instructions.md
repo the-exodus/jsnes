@@ -17,6 +17,7 @@ JSNES is a SNES emulator in JavaScript (ES2022), ~4,000 lines. Runs in browser w
 - Tests run independently, no build required first
 - Do NOT fix pre-existing ESLint errors unless asked
 - All tests now pass including emulator tests (hang issue fixed)
+- ALWAYS update `copilot-instructions.md` if necessary after making changes to the project.
 
 ## Known Issues
 - **ESLint:** ppu.js:463 & main.js:101 errors pre-exist. Wrap declarations in braces if editing those switches.
