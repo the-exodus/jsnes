@@ -252,6 +252,89 @@ export class CPU {
     return (base + this.Y) & 0xFFFF;
   }
 
+  // Direct Page addressing - uses D register
+  directPage() {
+    const offset = this.read8(this.PC);
+    this.PC = (this.PC + 1) & 0xFFFF;
+    return (this.D + offset) & 0xFFFF;
+  }
+
+  // Direct Page Indirect: (dp)
+  directPageIndirect() {
+    const dp = this.read8(this.PC);
+    this.PC = (this.PC + 1) & 0xFFFF;
+    const addr = (this.D + dp) & 0xFFFF;
+    return this.read16(addr);
+  }
+
+  // Direct Page Indirect Indexed with Y: (dp),Y
+  directPageIndirectIndexedY() {
+    const dp = this.read8(this.PC);
+    this.PC = (this.PC + 1) & 0xFFFF;
+    const addr = (this.D + dp) & 0xFFFF;
+    const base = this.read16(addr);
+    return (base + this.Y) & 0xFFFF;
+  }
+
+  // Direct Page Indirect Long: [dp]
+  directPageIndirectLong() {
+    const dp = this.read8(this.PC);
+    this.PC = (this.PC + 1) & 0xFFFF;
+    const addr = (this.D + dp) & 0xFFFF;
+    const low = this.read8(addr);
+    const mid = this.read8(addr + 1);
+    const high = this.read8(addr + 2);
+    return (high << 16) | (mid << 8) | low;
+  }
+
+  // Direct Page Indirect Long Indexed with Y: [dp],Y
+  directPageIndirectLongIndexedY() {
+    const dp = this.read8(this.PC);
+    this.PC = (this.PC + 1) & 0xFFFF;
+    const addr = (this.D + dp) & 0xFFFF;
+    const low = this.read8(addr);
+    const mid = this.read8(addr + 1);
+    const high = this.read8(addr + 2);
+    const base = (high << 16) | (mid << 8) | low;
+    return (base + this.Y) & 0xFFFFFF;
+  }
+
+  // Absolute Long: long
+  absoluteLong() {
+    const low = this.read8(this.PC);
+    const mid = this.read8(this.PC + 1);
+    const high = this.read8(this.PC + 2);
+    this.PC = (this.PC + 3) & 0xFFFF;
+    return (high << 16) | (mid << 8) | low;
+  }
+
+  // Absolute Long Indexed with X: long,X
+  absoluteLongIndexedX() {
+    const low = this.read8(this.PC);
+    const mid = this.read8(this.PC + 1);
+    const high = this.read8(this.PC + 2);
+    this.PC = (this.PC + 3) & 0xFFFF;
+    const base = (high << 16) | (mid << 8) | low;
+    return (base + this.X) & 0xFFFFFF;
+  }
+
+  // Stack Relative Indirect Indexed with Y: (sr,S),Y
+  stackRelativeIndirectIndexedY() {
+    const offset = this.read8(this.PC);
+    this.PC = (this.PC + 1) & 0xFFFF;
+    const addr = (this.S + offset) & 0xFFFF;
+    const base = this.read16(addr);
+    return (base + this.Y) & 0xFFFF;
+  }
+
+  // Absolute Indexed Indirect: (addr,X)
+  absoluteIndexedIndirect() {
+    const base = this.read16(this.PC);
+    this.PC = (this.PC + 2) & 0xFFFF;
+    const ptr = (base + this.X) & 0xFFFF;
+    return this.read16(ptr);
+  }
+
   // Opcode implementations
   // Load/Store operations
   LDA(addr) {
@@ -384,6 +467,102 @@ export class CPU {
       this.write16(addr, value);
     }
     this.updateNZFlags(value);
+  }
+
+  // Compare operations
+  CMP(addr) {
+    const value = this.getFlag(CPUFlags.MEMORY_8BIT) ? this.read8(addr) : this.read16(addr);
+    const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+    const result = (this.A - value) & 0xFFFFFF;
+    this.setFlag(CPUFlags.CARRY, this.A >= value);
+    this.setFlag(CPUFlags.ZERO, (result & mask) === 0);
+    this.setFlag(CPUFlags.NEGATIVE, (result & (this.getFlag(CPUFlags.MEMORY_8BIT) ? 0x80 : 0x8000)) !== 0);
+  }
+
+  CPX(addr) {
+    const value = this.getFlag(CPUFlags.INDEX_8BIT) ? this.read8(addr) : this.read16(addr);
+    const mask = this.getFlag(CPUFlags.INDEX_8BIT) ? 0xFF : 0xFFFF;
+    const result = (this.X - value) & 0xFFFFFF;
+    this.setFlag(CPUFlags.CARRY, this.X >= value);
+    this.setFlag(CPUFlags.ZERO, (result & mask) === 0);
+    this.setFlag(CPUFlags.NEGATIVE, (result & (this.getFlag(CPUFlags.INDEX_8BIT) ? 0x80 : 0x8000)) !== 0);
+  }
+
+  CPY(addr) {
+    const value = this.getFlag(CPUFlags.INDEX_8BIT) ? this.read8(addr) : this.read16(addr);
+    const mask = this.getFlag(CPUFlags.INDEX_8BIT) ? 0xFF : 0xFFFF;
+    const result = (this.Y - value) & 0xFFFFFF;
+    this.setFlag(CPUFlags.CARRY, this.Y >= value);
+    this.setFlag(CPUFlags.ZERO, (result & mask) === 0);
+    this.setFlag(CPUFlags.NEGATIVE, (result & (this.getFlag(CPUFlags.INDEX_8BIT) ? 0x80 : 0x8000)) !== 0);
+  }
+
+  // Shift/Rotate operations
+  ASL(addr) {
+    let value = this.getFlag(CPUFlags.MEMORY_8BIT) ? this.read8(addr) : this.read16(addr);
+    const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+    const highBit = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0x80 : 0x8000;
+    this.setFlag(CPUFlags.CARRY, (value & highBit) !== 0);
+    value = (value << 1) & mask;
+    if (this.getFlag(CPUFlags.MEMORY_8BIT)) {
+      this.write8(addr, value);
+    } else {
+      this.write16(addr, value);
+    }
+    this.updateNZFlags(value);
+  }
+
+  LSR(addr) {
+    let value = this.getFlag(CPUFlags.MEMORY_8BIT) ? this.read8(addr) : this.read16(addr);
+    const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+    this.setFlag(CPUFlags.CARRY, (value & 0x01) !== 0);
+    value = (value >> 1) & mask;
+    if (this.getFlag(CPUFlags.MEMORY_8BIT)) {
+      this.write8(addr, value);
+    } else {
+      this.write16(addr, value);
+    }
+    this.updateNZFlags(value);
+  }
+
+  ROL(addr) {
+    let value = this.getFlag(CPUFlags.MEMORY_8BIT) ? this.read8(addr) : this.read16(addr);
+    const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+    const highBit = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0x80 : 0x8000;
+    const oldCarry = this.getFlag(CPUFlags.CARRY) ? 1 : 0;
+    this.setFlag(CPUFlags.CARRY, (value & highBit) !== 0);
+    value = ((value << 1) | oldCarry) & mask;
+    if (this.getFlag(CPUFlags.MEMORY_8BIT)) {
+      this.write8(addr, value);
+    } else {
+      this.write16(addr, value);
+    }
+    this.updateNZFlags(value);
+  }
+
+  ROR(addr) {
+    let value = this.getFlag(CPUFlags.MEMORY_8BIT) ? this.read8(addr) : this.read16(addr);
+    const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+    const highBit = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0x80 : 0x8000;
+    const oldCarry = this.getFlag(CPUFlags.CARRY) ? highBit : 0;
+    this.setFlag(CPUFlags.CARRY, (value & 0x01) !== 0);
+    value = ((value >> 1) | oldCarry) & mask;
+    if (this.getFlag(CPUFlags.MEMORY_8BIT)) {
+      this.write8(addr, value);
+    } else {
+      this.write16(addr, value);
+    }
+    this.updateNZFlags(value);
+  }
+
+  // BIT test operation
+  BIT(addr) {
+    const value = this.getFlag(CPUFlags.MEMORY_8BIT) ? this.read8(addr) : this.read16(addr);
+    const result = this.A & value;
+    const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+    this.setFlag(CPUFlags.ZERO, (result & mask) === 0);
+    this.setFlag(CPUFlags.OVERFLOW, (value & (this.getFlag(CPUFlags.MEMORY_8BIT) ? 0x40 : 0x4000)) !== 0);
+    this.setFlag(CPUFlags.NEGATIVE, (value & (this.getFlag(CPUFlags.MEMORY_8BIT) ? 0x80 : 0x8000)) !== 0);
   }
 
   // Initialize opcode table (partial implementation - will be expanded)
@@ -699,6 +878,674 @@ export class CPU {
       this.setFlag(CPUFlags.OVERFLOW, (value & 0x40) !== 0);
       this.setFlag(CPUFlags.NEGATIVE, (value & 0x80) !== 0);
       this.cycles += 4;
+    };
+
+    // ===== ORA opcodes =====
+    table[0x05] = function() { this.ORA(this.directPage()); this.cycles += 3; };           // ORA dp
+    table[0x07] = function() { this.ORA(this.directPageIndirectLong()); this.cycles += 6; }; // ORA [dp]
+    table[0x09] = function() { this.ORA(this.immediate()); this.cycles += 2; };            // ORA #const
+    table[0x0D] = function() { this.ORA(this.absolute()); this.cycles += 4; };             // ORA addr
+    table[0x0F] = function() { this.ORA(this.absoluteLong()); this.cycles += 5; };         // ORA long
+    table[0x11] = function() { this.ORA(this.directPageIndirectIndexedY()); this.cycles += 5; }; // ORA (dp),Y
+    table[0x12] = function() { this.ORA(this.directPageIndirect()); this.cycles += 5; };   // ORA (dp)
+    table[0x13] = function() { this.ORA(this.stackRelativeIndirectIndexedY()); this.cycles += 7; }; // ORA (sr,S),Y
+    table[0x15] = function() { this.ORA(this.directPageX()); this.cycles += 4; };          // ORA dp,X
+    table[0x17] = function() { this.ORA(this.directPageIndirectLongIndexedY()); this.cycles += 6; }; // ORA [dp],Y
+    table[0x19] = function() { this.ORA(this.absoluteY()); this.cycles += 4; };            // ORA addr,Y
+    table[0x1D] = function() { this.ORA(this.absoluteX()); this.cycles += 4; };            // ORA addr,X
+    table[0x1F] = function() { this.ORA(this.absoluteLongIndexedX()); this.cycles += 5; }; // ORA long,X
+
+    // ===== AND opcodes =====
+    table[0x21] = function() { this.AND(this.directPageIndexedIndirectX()); this.cycles += 6; }; // AND (dp,X)
+    table[0x23] = function() { this.AND(this.stackRelative()); this.cycles += 4; };        // AND sr,S
+    table[0x25] = function() { this.AND(this.directPage()); this.cycles += 3; };           // AND dp
+    table[0x27] = function() { this.AND(this.directPageIndirectLong()); this.cycles += 6; }; // AND [dp]
+    table[0x29] = function() { this.AND(this.immediate()); this.cycles += 2; };            // AND #const
+    table[0x2D] = function() { this.AND(this.absolute()); this.cycles += 4; };             // AND addr
+    table[0x2F] = function() { this.AND(this.absoluteLong()); this.cycles += 5; };         // AND long
+    table[0x31] = function() { this.AND(this.directPageIndirectIndexedY()); this.cycles += 5; }; // AND (dp),Y
+    table[0x32] = function() { this.AND(this.directPageIndirect()); this.cycles += 5; };   // AND (dp)
+    table[0x33] = function() { this.AND(this.stackRelativeIndirectIndexedY()); this.cycles += 7; }; // AND (sr,S),Y
+    table[0x35] = function() { this.AND(this.directPageX()); this.cycles += 4; };          // AND dp,X
+    table[0x37] = function() { this.AND(this.directPageIndirectLongIndexedY()); this.cycles += 6; }; // AND [dp],Y
+    table[0x39] = function() { this.AND(this.absoluteY()); this.cycles += 4; };            // AND addr,Y
+    table[0x3D] = function() { this.AND(this.absoluteX()); this.cycles += 4; };            // AND addr,X
+    table[0x3F] = function() { this.AND(this.absoluteLongIndexedX()); this.cycles += 5; }; // AND long,X
+
+    // ===== EOR opcodes =====
+    table[0x41] = function() { this.EOR(this.directPageIndexedIndirectX()); this.cycles += 6; }; // EOR (dp,X)
+    table[0x43] = function() { this.EOR(this.stackRelative()); this.cycles += 4; };        // EOR sr,S
+    table[0x45] = function() { this.EOR(this.directPage()); this.cycles += 3; };           // EOR dp
+    table[0x47] = function() { this.EOR(this.directPageIndirectLong()); this.cycles += 6; }; // EOR [dp]
+    table[0x49] = function() { this.EOR(this.immediate()); this.cycles += 2; };            // EOR #const
+    table[0x4D] = function() { this.EOR(this.absolute()); this.cycles += 4; };             // EOR addr
+    table[0x4F] = function() { this.EOR(this.absoluteLong()); this.cycles += 5; };         // EOR long
+    table[0x51] = function() { this.EOR(this.directPageIndirectIndexedY()); this.cycles += 5; }; // EOR (dp),Y
+    table[0x52] = function() { this.EOR(this.directPageIndirect()); this.cycles += 5; };   // EOR (dp)
+    table[0x53] = function() { this.EOR(this.stackRelativeIndirectIndexedY()); this.cycles += 7; }; // EOR (sr,S),Y
+    table[0x55] = function() { this.EOR(this.directPageX()); this.cycles += 4; };          // EOR dp,X
+    table[0x57] = function() { this.EOR(this.directPageIndirectLongIndexedY()); this.cycles += 6; }; // EOR [dp],Y
+    table[0x59] = function() { this.EOR(this.absoluteY()); this.cycles += 4; };            // EOR addr,Y
+    table[0x5D] = function() { this.EOR(this.absoluteX()); this.cycles += 4; };            // EOR addr,X
+    table[0x5F] = function() { this.EOR(this.absoluteLongIndexedX()); this.cycles += 5; }; // EOR long,X
+
+    // ===== ADC opcodes =====
+    table[0x61] = function() { this.ADC(this.directPageIndexedIndirectX()); this.cycles += 6; }; // ADC (dp,X)
+    table[0x63] = function() { this.ADC(this.stackRelative()); this.cycles += 4; };        // ADC sr,S
+    table[0x65] = function() { this.ADC(this.directPage()); this.cycles += 3; };           // ADC dp
+    table[0x67] = function() { this.ADC(this.directPageIndirectLong()); this.cycles += 6; }; // ADC [dp]
+    table[0x69] = function() { this.ADC(this.immediate()); this.cycles += 2; };            // ADC #const
+    table[0x6D] = function() { this.ADC(this.absolute()); this.cycles += 4; };             // ADC addr
+    table[0x6F] = function() { this.ADC(this.absoluteLong()); this.cycles += 5; };         // ADC long
+    table[0x71] = function() { this.ADC(this.directPageIndirectIndexedY()); this.cycles += 5; }; // ADC (dp),Y
+    table[0x72] = function() { this.ADC(this.directPageIndirect()); this.cycles += 5; };   // ADC (dp)
+    table[0x73] = function() { this.ADC(this.stackRelativeIndirectIndexedY()); this.cycles += 7; }; // ADC (sr,S),Y
+    table[0x75] = function() { this.ADC(this.directPageX()); this.cycles += 4; };          // ADC dp,X
+    table[0x77] = function() { this.ADC(this.directPageIndirectLongIndexedY()); this.cycles += 6; }; // ADC [dp],Y
+    table[0x79] = function() { this.ADC(this.absoluteY()); this.cycles += 4; };            // ADC addr,Y
+    table[0x7D] = function() { this.ADC(this.absoluteX()); this.cycles += 4; };            // ADC addr,X
+    table[0x7F] = function() { this.ADC(this.absoluteLongIndexedX()); this.cycles += 5; }; // ADC long,X
+
+    // ===== SBC opcodes =====
+    table[0xE1] = function() { this.SBC(this.directPageIndexedIndirectX()); this.cycles += 6; }; // SBC (dp,X)
+    table[0xE3] = function() { this.SBC(this.stackRelative()); this.cycles += 4; };        // SBC sr,S
+    table[0xE5] = function() { this.SBC(this.directPage()); this.cycles += 3; };           // SBC dp
+    table[0xE7] = function() { this.SBC(this.directPageIndirectLong()); this.cycles += 6; }; // SBC [dp]
+    table[0xE9] = function() { this.SBC(this.immediate()); this.cycles += 2; };            // SBC #const
+    table[0xED] = function() { this.SBC(this.absolute()); this.cycles += 4; };             // SBC addr
+    table[0xEF] = function() { this.SBC(this.absoluteLong()); this.cycles += 5; };         // SBC long
+    table[0xF1] = function() { this.SBC(this.directPageIndirectIndexedY()); this.cycles += 5; }; // SBC (dp),Y
+    table[0xF2] = function() { this.SBC(this.directPageIndirect()); this.cycles += 5; };   // SBC (dp)
+    table[0xF3] = function() { this.SBC(this.stackRelativeIndirectIndexedY()); this.cycles += 7; }; // SBC (sr,S),Y
+    table[0xF5] = function() { this.SBC(this.directPageX()); this.cycles += 4; };          // SBC dp,X
+    table[0xF7] = function() { this.SBC(this.directPageIndirectLongIndexedY()); this.cycles += 6; }; // SBC [dp],Y
+    table[0xF9] = function() { this.SBC(this.absoluteY()); this.cycles += 4; };            // SBC addr,Y
+    table[0xFD] = function() { this.SBC(this.absoluteX()); this.cycles += 4; };            // SBC addr,X
+    table[0xFF] = function() { this.SBC(this.absoluteLongIndexedX()); this.cycles += 5; }; // SBC long,X
+
+    // ===== CMP opcodes =====
+    table[0xC1] = function() { this.CMP(this.directPageIndexedIndirectX()); this.cycles += 6; }; // CMP (dp,X)
+    table[0xC3] = function() { this.CMP(this.stackRelative()); this.cycles += 4; };        // CMP sr,S
+    table[0xC5] = function() { this.CMP(this.directPage()); this.cycles += 3; };           // CMP dp
+    table[0xC7] = function() { this.CMP(this.directPageIndirectLong()); this.cycles += 6; }; // CMP [dp]
+    table[0xC9] = function() { this.CMP(this.immediate()); this.cycles += 2; };            // CMP #const
+    table[0xCD] = function() { this.CMP(this.absolute()); this.cycles += 4; };             // CMP addr
+    table[0xCF] = function() { this.CMP(this.absoluteLong()); this.cycles += 5; };         // CMP long
+    table[0xD1] = function() { this.CMP(this.directPageIndirectIndexedY()); this.cycles += 5; }; // CMP (dp),Y
+    table[0xD2] = function() { this.CMP(this.directPageIndirect()); this.cycles += 5; };   // CMP (dp)
+    table[0xD3] = function() { this.CMP(this.stackRelativeIndirectIndexedY()); this.cycles += 7; }; // CMP (sr,S),Y
+    table[0xD5] = function() { this.CMP(this.directPageX()); this.cycles += 4; };          // CMP dp,X
+    table[0xD7] = function() { this.CMP(this.directPageIndirectLongIndexedY()); this.cycles += 6; }; // CMP [dp],Y
+    table[0xD9] = function() { this.CMP(this.absoluteY()); this.cycles += 4; };            // CMP addr,Y
+    table[0xDF] = function() { this.CMP(this.absoluteLongIndexedX()); this.cycles += 5; }; // CMP long,X
+
+    // ===== CPX opcodes =====
+    table[0xE0] = function() { this.CPX(this.immediate()); this.cycles += 2; };            // CPX #const
+    table[0xE4] = function() { this.CPX(this.directPage()); this.cycles += 3; };           // CPX dp
+    table[0xEC] = function() { this.CPX(this.absolute()); this.cycles += 4; };             // CPX addr
+
+    // ===== CPY opcodes =====
+    table[0xC0] = function() { this.CPY(this.immediate()); this.cycles += 2; };            // CPY #const
+    table[0xC4] = function() { this.CPY(this.directPage()); this.cycles += 3; };           // CPY dp
+    table[0xCC] = function() { this.CPY(this.absolute()); this.cycles += 4; };             // CPY addr
+
+    // ===== ASL opcodes =====
+    table[0x06] = function() { this.ASL(this.directPage()); this.cycles += 5; };           // ASL dp
+    table[0x0A] = function() { // ASL A
+      const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+      const highBit = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0x80 : 0x8000;
+      this.setFlag(CPUFlags.CARRY, (this.A & highBit) !== 0);
+      this.A = (this.A << 1) & mask;
+      this.updateNZFlags(this.A);
+      this.cycles += 2;
+    };
+    table[0x16] = function() { this.ASL(this.directPageX()); this.cycles += 6; };          // ASL dp,X
+    table[0x1E] = function() { this.ASL(this.absoluteX()); this.cycles += 7; };            // ASL addr,X
+
+    // ===== LSR opcodes =====
+    table[0x46] = function() { this.LSR(this.directPage()); this.cycles += 5; };           // LSR dp
+    table[0x4A] = function() { // LSR A
+      const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+      this.setFlag(CPUFlags.CARRY, (this.A & 0x01) !== 0);
+      this.A = (this.A >> 1) & mask;
+      this.updateNZFlags(this.A);
+      this.cycles += 2;
+    };
+    table[0x4E] = function() { this.LSR(this.absolute()); this.cycles += 6; };             // LSR addr
+    table[0x56] = function() { this.LSR(this.directPageX()); this.cycles += 6; };          // LSR dp,X
+    table[0x5E] = function() { this.LSR(this.absoluteX()); this.cycles += 7; };            // LSR addr,X
+
+    // ===== ROL opcodes =====
+    table[0x26] = function() { this.ROL(this.directPage()); this.cycles += 5; };           // ROL dp
+    table[0x2A] = function() { // ROL A
+      const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+      const highBit = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0x80 : 0x8000;
+      const oldCarry = this.getFlag(CPUFlags.CARRY) ? 1 : 0;
+      this.setFlag(CPUFlags.CARRY, (this.A & highBit) !== 0);
+      this.A = ((this.A << 1) | oldCarry) & mask;
+      this.updateNZFlags(this.A);
+      this.cycles += 2;
+    };
+    table[0x2E] = function() { this.ROL(this.absolute()); this.cycles += 6; };             // ROL addr
+    table[0x36] = function() { this.ROL(this.directPageX()); this.cycles += 6; };          // ROL dp,X
+    table[0x3E] = function() { this.ROL(this.absoluteX()); this.cycles += 7; };            // ROL addr,X
+
+    // ===== ROR opcodes =====
+    table[0x66] = function() { this.ROR(this.directPage()); this.cycles += 5; };           // ROR dp
+    table[0x6A] = function() { // ROR A
+      const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+      const highBit = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0x80 : 0x8000;
+      const oldCarry = this.getFlag(CPUFlags.CARRY) ? highBit : 0;
+      this.setFlag(CPUFlags.CARRY, (this.A & 0x01) !== 0);
+      this.A = ((this.A >> 1) | oldCarry) & mask;
+      this.updateNZFlags(this.A);
+      this.cycles += 2;
+    };
+    table[0x6E] = function() { this.ROR(this.absolute()); this.cycles += 6; };             // ROR addr
+    table[0x76] = function() { this.ROR(this.directPageX()); this.cycles += 6; };          // ROR dp,X
+    table[0x7E] = function() { this.ROR(this.absoluteX()); this.cycles += 7; };            // ROR addr,X
+
+    // ===== INC/DEC opcodes =====
+    table[0x1A] = function() { // INC A
+      const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+      this.A = (this.A + 1) & mask;
+      this.updateNZFlags(this.A);
+      this.cycles += 2;
+    };
+    table[0x3A] = function() { // DEC A
+      const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+      this.A = (this.A - 1) & mask;
+      this.updateNZFlags(this.A);
+      this.cycles += 2;
+    };
+    table[0xC6] = function() { this.DEC(this.directPage()); this.cycles += 5; };           // DEC dp
+    table[0xCE] = function() { this.DEC(this.absolute()); this.cycles += 6; };             // DEC addr
+    table[0xD6] = function() { this.DEC(this.directPageX()); this.cycles += 6; };          // DEC dp,X
+    table[0xDE] = function() { this.DEC(this.absoluteX()); this.cycles += 7; };            // DEC addr,X
+    table[0xE6] = function() { this.INC(this.directPage()); this.cycles += 5; };           // INC dp
+    table[0xEE] = function() { this.INC(this.absolute()); this.cycles += 6; };             // INC addr
+    table[0xF6] = function() { this.INC(this.directPageX()); this.cycles += 6; };          // INC dp,X
+    table[0xFE] = function() { this.INC(this.absoluteX()); this.cycles += 7; };            // INC addr,X
+    table[0xC8] = function() { // INY
+      const mask = this.getFlag(CPUFlags.INDEX_8BIT) ? 0xFF : 0xFFFF;
+      this.Y = (this.Y + 1) & mask;
+      this.updateNZFlags(this.Y);
+      this.cycles += 2;
+    };
+    table[0xCA] = function() { // DEX
+      const mask = this.getFlag(CPUFlags.INDEX_8BIT) ? 0xFF : 0xFFFF;
+      this.X = (this.X - 1) & mask;
+      this.updateNZFlags(this.X);
+      this.cycles += 2;
+    };
+    table[0x88] = function() { // DEY
+      const mask = this.getFlag(CPUFlags.INDEX_8BIT) ? 0xFF : 0xFFFF;
+      this.Y = (this.Y - 1) & mask;
+      this.updateNZFlags(this.Y);
+      this.cycles += 2;
+    };
+    table[0xE8] = function() { // INX
+      const mask = this.getFlag(CPUFlags.INDEX_8BIT) ? 0xFF : 0xFFFF;
+      this.X = (this.X + 1) & mask;
+      this.updateNZFlags(this.X);
+      this.cycles += 2;
+    };
+
+    // ===== LDA opcodes (additional) =====
+    table[0xA1] = function() { this.LDA(this.directPageIndexedIndirectX()); this.cycles += 6; }; // LDA (dp,X)
+    table[0xA3] = function() { this.LDA(this.stackRelative()); this.cycles += 4; };        // LDA sr,S
+    table[0xA7] = function() { this.LDA(this.directPageIndirectLong()); this.cycles += 6; }; // LDA [dp]
+    table[0xAF] = function() { this.LDA(this.absoluteLong()); this.cycles += 5; };         // LDA long
+    table[0xB1] = function() { this.LDA(this.directPageIndirectIndexedY()); this.cycles += 5; }; // LDA (dp),Y
+    table[0xB2] = function() { this.LDA(this.directPageIndirect()); this.cycles += 5; };   // LDA (dp)
+    table[0xB3] = function() { this.LDA(this.stackRelativeIndirectIndexedY()); this.cycles += 7; }; // LDA (sr,S),Y
+    table[0xB7] = function() { this.LDA(this.directPageIndirectLongIndexedY()); this.cycles += 6; }; // LDA [dp],Y
+    table[0xBF] = function() { this.LDA(this.absoluteLongIndexedX()); this.cycles += 5; }; // LDA long,X
+
+    // ===== STA opcodes (additional) =====
+    table[0x81] = function() { this.STA(this.directPageIndexedIndirectX()); this.cycles += 6; }; // STA (dp,X)
+    table[0x83] = function() { this.STA(this.stackRelative()); this.cycles += 4; };        // STA sr,S
+    table[0x87] = function() { this.STA(this.directPageIndirectLong()); this.cycles += 6; }; // STA [dp]
+    table[0x8F] = function() { this.STA(this.absoluteLong()); this.cycles += 5; };         // STA long
+    table[0x91] = function() { this.STA(this.directPageIndirectIndexedY()); this.cycles += 6; }; // STA (dp),Y
+    table[0x92] = function() { this.STA(this.directPageIndirect()); this.cycles += 5; };   // STA (dp)
+    table[0x93] = function() { this.STA(this.stackRelativeIndirectIndexedY()); this.cycles += 7; }; // STA (sr,S),Y
+    table[0x97] = function() { this.STA(this.directPageIndirectLongIndexedY()); this.cycles += 6; }; // STA [dp],Y
+    table[0x9F] = function() { this.STA(this.absoluteLongIndexedX()); this.cycles += 5; }; // STA long,X
+
+    // ===== STX/STY opcodes =====
+    table[0x84] = function() { this.STY(this.directPage()); this.cycles += 3; };           // STY dp
+    table[0x86] = function() { this.STX(this.directPage()); this.cycles += 3; };           // STX dp
+    table[0x8C] = function() { this.STY(this.absolute()); this.cycles += 4; };             // STY addr
+    table[0x8E] = function() { this.STX(this.absolute()); this.cycles += 4; };             // STX addr
+    table[0x94] = function() { this.STY(this.directPageX()); this.cycles += 4; };          // STY dp,X
+    table[0x96] = function() { this.STX(this.directPageY()); this.cycles += 4; };          // STX dp,Y
+
+    // ===== STZ opcodes =====
+    table[0x64] = function() { // STZ dp
+      const addr = this.directPage();
+      if (this.getFlag(CPUFlags.MEMORY_8BIT)) {
+        this.write8(addr, 0);
+      } else {
+        this.write16(addr, 0);
+      }
+      this.cycles += 3;
+    };
+    table[0x74] = function() { // STZ dp,X
+      const addr = this.directPageX();
+      if (this.getFlag(CPUFlags.MEMORY_8BIT)) {
+        this.write8(addr, 0);
+      } else {
+        this.write16(addr, 0);
+      }
+      this.cycles += 4;
+    };
+    table[0x9C] = function() { // STZ addr
+      const addr = this.absolute();
+      if (this.getFlag(CPUFlags.MEMORY_8BIT)) {
+        this.write8(addr, 0);
+      } else {
+        this.write16(addr, 0);
+      }
+      this.cycles += 4;
+    };
+    table[0x9E] = function() { // STZ addr,X
+      const addr = this.absoluteX();
+      if (this.getFlag(CPUFlags.MEMORY_8BIT)) {
+        this.write8(addr, 0);
+      } else {
+        this.write16(addr, 0);
+      }
+      this.cycles += 5;
+    };
+
+    // ===== Branch opcodes =====
+    table[0x10] = function() { // BPL - Branch if Plus (N=0)
+      const offset = this.read8(this.PC);
+      this.PC = (this.PC + 1) & 0xFFFF;
+      if (!this.getFlag(CPUFlags.NEGATIVE)) {
+        const signedOffset = offset < 0x80 ? offset : offset - 0x100;
+        this.PC = (this.PC + signedOffset) & 0xFFFF;
+        this.cycles += 3;
+      } else {
+        this.cycles += 2;
+      }
+    };
+    table[0x50] = function() { // BVC - Branch if Overflow Clear (V=0)
+      const offset = this.read8(this.PC);
+      this.PC = (this.PC + 1) & 0xFFFF;
+      if (!this.getFlag(CPUFlags.OVERFLOW)) {
+        const signedOffset = offset < 0x80 ? offset : offset - 0x100;
+        this.PC = (this.PC + signedOffset) & 0xFFFF;
+        this.cycles += 3;
+      } else {
+        this.cycles += 2;
+      }
+    };
+    table[0x70] = function() { // BVS - Branch if Overflow Set (V=1)
+      const offset = this.read8(this.PC);
+      this.PC = (this.PC + 1) & 0xFFFF;
+      if (this.getFlag(CPUFlags.OVERFLOW)) {
+        const signedOffset = offset < 0x80 ? offset : offset - 0x100;
+        this.PC = (this.PC + signedOffset) & 0xFFFF;
+        this.cycles += 3;
+      } else {
+        this.cycles += 2;
+      }
+    };
+    table[0x90] = function() { // BCC - Branch if Carry Clear (C=0)
+      const offset = this.read8(this.PC);
+      this.PC = (this.PC + 1) & 0xFFFF;
+      if (!this.getFlag(CPUFlags.CARRY)) {
+        const signedOffset = offset < 0x80 ? offset : offset - 0x100;
+        this.PC = (this.PC + signedOffset) & 0xFFFF;
+        this.cycles += 3;
+      } else {
+        this.cycles += 2;
+      }
+    };
+    table[0xB0] = function() { // BCS - Branch if Carry Set (C=1)
+      const offset = this.read8(this.PC);
+      this.PC = (this.PC + 1) & 0xFFFF;
+      if (this.getFlag(CPUFlags.CARRY)) {
+        const signedOffset = offset < 0x80 ? offset : offset - 0x100;
+        this.PC = (this.PC + signedOffset) & 0xFFFF;
+        this.cycles += 3;
+      } else {
+        this.cycles += 2;
+      }
+    };
+    table[0xD0] = function() { // BNE - Branch if Not Equal (Z=0)
+      const offset = this.read8(this.PC);
+      this.PC = (this.PC + 1) & 0xFFFF;
+      if (!this.getFlag(CPUFlags.ZERO)) {
+        const signedOffset = offset < 0x80 ? offset : offset - 0x100;
+        this.PC = (this.PC + signedOffset) & 0xFFFF;
+        this.cycles += 3;
+      } else {
+        this.cycles += 2;
+      }
+    };
+    table[0xF0] = function() { // BEQ - Branch if Equal (Z=1)
+      const offset = this.read8(this.PC);
+      this.PC = (this.PC + 1) & 0xFFFF;
+      if (this.getFlag(CPUFlags.ZERO)) {
+        const signedOffset = offset < 0x80 ? offset : offset - 0x100;
+        this.PC = (this.PC + signedOffset) & 0xFFFF;
+        this.cycles += 3;
+      } else {
+        this.cycles += 2;
+      }
+    };
+    table[0x82] = function() { // BRL - Branch Always Long
+      const offset = this.read16(this.PC);
+      this.PC = (this.PC + 2) & 0xFFFF;
+      const signedOffset = offset < 0x8000 ? offset : offset - 0x10000;
+      this.PC = (this.PC + signedOffset) & 0xFFFF;
+      this.cycles += 4;
+    };
+
+    // ===== Stack opcodes (additional) =====
+    table[0x08] = function() { // PHP - Push Processor Status
+      this.push8(this.P);
+      this.cycles += 3;
+    };
+    table[0x28] = function() { // PLP - Pull Processor Status
+      this.P = this.pop8();
+      this.cycles += 4;
+    };
+    table[0x0B] = function() { // PHD - Push Direct Page
+      this.push16(this.D);
+      this.cycles += 4;
+    };
+    table[0x2B] = function() { // PLD - Pull Direct Page
+      this.D = this.pop16();
+      this.setFlag(CPUFlags.ZERO, this.D === 0);
+      this.setFlag(CPUFlags.NEGATIVE, (this.D & 0x8000) !== 0);
+      this.cycles += 5;
+    };
+    table[0x4B] = function() { // PHK - Push Program Bank
+      this.push8(this.PBR);
+      this.cycles += 3;
+    };
+    table[0x5A] = function() { // PHY - Push Y
+      if (this.getFlag(CPUFlags.INDEX_8BIT)) {
+        this.push8(this.Y);
+      } else {
+        this.push16(this.Y);
+      }
+      this.cycles += 3;
+    };
+    table[0x7A] = function() { // PLY - Pull Y
+      if (this.getFlag(CPUFlags.INDEX_8BIT)) {
+        this.Y = this.pop8();
+      } else {
+        this.Y = this.pop16();
+      }
+      this.updateNZFlags(this.Y);
+      this.cycles += 4;
+    };
+    table[0x8B] = function() { // PHB - Push Data Bank
+      this.push8(this.DBR);
+      this.cycles += 3;
+    };
+    table[0xDA] = function() { // PHX - Push X
+      if (this.getFlag(CPUFlags.INDEX_8BIT)) {
+        this.push8(this.X);
+      } else {
+        this.push16(this.X);
+      }
+      this.cycles += 3;
+    };
+    table[0xFA] = function() { // PLX - Pull X
+      if (this.getFlag(CPUFlags.INDEX_8BIT)) {
+        this.X = this.pop8();
+      } else {
+        this.X = this.pop16();
+      }
+      this.updateNZFlags(this.X);
+      this.cycles += 4;
+    };
+    table[0x62] = function() { // PER - Push Effective PC Relative
+      const offset = this.read16(this.PC);
+      this.PC = (this.PC + 2) & 0xFFFF;
+      const effectiveAddr = (this.PC + offset) & 0xFFFF;
+      this.push16(effectiveAddr);
+      this.cycles += 6;
+    };
+    table[0xD4] = function() { // PEI - Push Effective Indirect
+      const dp = this.read8(this.PC);
+      this.PC = (this.PC + 1) & 0xFFFF;
+      const addr = (this.D + dp) & 0xFFFF;
+      const value = this.read16(addr);
+      this.push16(value);
+      this.cycles += 6;
+    };
+    table[0xF4] = function() { // PEA - Push Effective Absolute
+      const value = this.read16(this.PC);
+      this.PC = (this.PC + 2) & 0xFFFF;
+      this.push16(value);
+      this.cycles += 5;
+    };
+
+    // ===== Transfer opcodes (additional) =====
+    table[0x1B] = function() { // TCS - Transfer Accumulator to Stack
+      if (this.emulationMode) {
+        this.S = 0x0100 | (this.A & 0xFF);
+      } else {
+        this.S = this.A;
+      }
+      this.cycles += 2;
+    };
+    table[0x3B] = function() { // TSC - Transfer Stack to Accumulator
+      this.A = this.S;
+      this.updateNZFlags(this.A);
+      this.cycles += 2;
+    };
+    table[0x7B] = function() { // TDC - Transfer Direct Page to Accumulator
+      this.A = this.D;
+      this.updateNZFlags(this.A);
+      this.cycles += 2;
+    };
+    table[0x9B] = function() { // TXY - Transfer X to Y
+      this.Y = this.X & (this.getFlag(CPUFlags.INDEX_8BIT) ? 0xFF : 0xFFFF);
+      this.updateNZFlags(this.Y);
+      this.cycles += 2;
+    };
+    table[0xBA] = function() { // TSX - Transfer Stack to X
+      this.X = this.S & (this.getFlag(CPUFlags.INDEX_8BIT) ? 0xFF : 0xFFFF);
+      this.updateNZFlags(this.X);
+      this.cycles += 2;
+    };
+    table[0xBB] = function() { // TYX - Transfer Y to X
+      this.X = this.Y & (this.getFlag(CPUFlags.INDEX_8BIT) ? 0xFF : 0xFFFF);
+      this.updateNZFlags(this.X);
+      this.cycles += 2;
+    };
+
+    // ===== BIT opcodes (additional) =====
+    table[0x2C] = function() { this.BIT(this.absolute()); this.cycles += 4; };             // BIT addr
+    table[0x3C] = function() { this.BIT(this.absoluteX()); this.cycles += 4; };            // BIT addr,X
+    table[0x89] = function() { // BIT #const - immediate mode (only affects Z flag)
+      const value = this.getFlag(CPUFlags.MEMORY_8BIT) ? this.read8(this.immediate()) : this.read16(this.immediate());
+      const result = this.A & value;
+      const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+      this.setFlag(CPUFlags.ZERO, (result & mask) === 0);
+      this.cycles += 2;
+    };
+
+    // ===== TSB/TRB opcodes =====
+    table[0x04] = function() { // TSB dp - Test and Set Bits
+      const addr = this.directPage();
+      const value = this.getFlag(CPUFlags.MEMORY_8BIT) ? this.read8(addr) : this.read16(addr);
+      const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+      this.setFlag(CPUFlags.ZERO, ((this.A & value) & mask) === 0);
+      const newValue = value | this.A;
+      if (this.getFlag(CPUFlags.MEMORY_8BIT)) {
+        this.write8(addr, newValue);
+      } else {
+        this.write16(addr, newValue);
+      }
+      this.cycles += 5;
+    };
+    table[0x0C] = function() { // TSB addr - Test and Set Bits
+      const addr = this.absolute();
+      const value = this.getFlag(CPUFlags.MEMORY_8BIT) ? this.read8(addr) : this.read16(addr);
+      const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+      this.setFlag(CPUFlags.ZERO, ((this.A & value) & mask) === 0);
+      const newValue = value | this.A;
+      if (this.getFlag(CPUFlags.MEMORY_8BIT)) {
+        this.write8(addr, newValue);
+      } else {
+        this.write16(addr, newValue);
+      }
+      this.cycles += 6;
+    };
+    table[0x14] = function() { // TRB dp - Test and Reset Bits
+      const addr = this.directPage();
+      const value = this.getFlag(CPUFlags.MEMORY_8BIT) ? this.read8(addr) : this.read16(addr);
+      const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+      this.setFlag(CPUFlags.ZERO, ((this.A & value) & mask) === 0);
+      const newValue = value & ~this.A;
+      if (this.getFlag(CPUFlags.MEMORY_8BIT)) {
+        this.write8(addr, newValue);
+      } else {
+        this.write16(addr, newValue);
+      }
+      this.cycles += 5;
+    };
+    table[0x1C] = function() { // TRB addr - Test and Reset Bits
+      const addr = this.absolute();
+      const value = this.getFlag(CPUFlags.MEMORY_8BIT) ? this.read8(addr) : this.read16(addr);
+      const mask = this.getFlag(CPUFlags.MEMORY_8BIT) ? 0xFF : 0xFFFF;
+      this.setFlag(CPUFlags.ZERO, ((this.A & value) & mask) === 0);
+      const newValue = value & ~this.A;
+      if (this.getFlag(CPUFlags.MEMORY_8BIT)) {
+        this.write8(addr, newValue);
+      } else {
+        this.write16(addr, newValue);
+      }
+      this.cycles += 6;
+    };
+
+    // ===== Jump opcodes (additional) =====
+    table[0x5C] = function() { // JML - Jump Long
+      const low = this.read16(this.PC);
+      const bank = this.read8(this.PC + 2);
+      this.PC = low;
+      this.PBR = bank;
+      this.cycles += 4;
+    };
+    table[0x7C] = function() { // JMP (addr,X) - Indexed Indirect
+      this.PC = this.absoluteIndexedIndirect();
+      this.cycles += 6;
+    };
+    table[0xDC] = function() { // JML [addr] - Indirect Long
+      const ptr = this.read16(this.PC);
+      this.PC = (this.PC + 2) & 0xFFFF;
+      const low = this.read8(ptr);
+      const mid = this.read8(ptr + 1);
+      const bank = this.read8(ptr + 2);
+      this.PC = (mid << 8) | low;
+      this.PBR = bank;
+      this.cycles += 6;
+    };
+
+    // ===== RTL - Return from Subroutine Long =====
+    table[0x6B] = function() { // RTL
+      this.PC = (this.pop16() + 1) & 0xFFFF;
+      this.PBR = this.pop8();
+      this.cycles += 6;
+    };
+
+    // ===== JSR indexed =====
+    table[0xFC] = function() { // JSR (addr,X)
+      const target = this.absoluteIndexedIndirect();
+      this.push16(this.PC - 1);
+      this.PC = target;
+      this.cycles += 8;
+    };
+
+    // ===== XBA - Exchange Accumulator Bytes =====
+    table[0xEB] = function() { // XBA
+      const low = this.A & 0xFF;
+      const high = (this.A >> 8) & 0xFF;
+      this.A = (low << 8) | high;
+      this.updateNZFlags(low); // Update flags based on new low byte
+      this.cycles += 3;
+    };
+
+    // ===== STP - Stop Processor =====
+    table[0xDB] = function() { // STP
+      // Halts processor - in emulation, we just increment cycles
+      this.cycles += 3;
+      // In a real implementation, this would stop execution until reset
+    };
+
+    // ===== WAI - Wait for Interrupt =====
+    table[0xCB] = function() { // WAI
+      // Waits for interrupt - in emulation, we just increment cycles
+      this.cycles += 3;
+      // In a real implementation, this would halt until interrupt received
+    };
+
+    // ===== WDM - Reserved =====
+    table[0x42] = function() { // WDM
+      // Reserved for future expansion - skip operand byte
+      this.PC = (this.PC + 1) & 0xFFFF;
+      // Takes 0 cycles according to spec
+    };
+
+    // ===== MVN/MVP - Block Move =====
+    table[0x54] = function() { // MVN srcbk,destbk - Move Negative (ascending)
+      const destBank = this.read8(this.PC);
+      const srcBank = this.read8(this.PC + 1);
+      this.PC = (this.PC + 2) & 0xFFFF;
+      
+      // Read from source, write to dest
+      const srcAddr = (srcBank << 16) | this.X;
+      const destAddr = (destBank << 16) | this.Y;
+      const value = this.memory.read(srcAddr);
+      this.memory.write(destAddr, value);
+      
+      // Increment pointers
+      this.X = (this.X + 1) & 0xFFFF;
+      this.Y = (this.Y + 1) & 0xFFFF;
+      
+      // Decrement counter
+      this.A = (this.A - 1) & 0xFFFF;
+      
+      // If not done, repeat (don't advance PC)
+      if (this.A !== 0xFFFF) {
+        this.PC = (this.PC - 3) & 0xFFFF;
+      }
+      
+      this.cycles += 7;
+    };
+    table[0x44] = function() { // MVP srcbk,destbk - Move Positive (descending)
+      const destBank = this.read8(this.PC);
+      const srcBank = this.read8(this.PC + 1);
+      this.PC = (this.PC + 2) & 0xFFFF;
+      
+      // Read from source, write to dest
+      const srcAddr = (srcBank << 16) | this.X;
+      const destAddr = (destBank << 16) | this.Y;
+      const value = this.memory.read(srcAddr);
+      this.memory.write(destAddr, value);
+      
+      // Decrement pointers
+      this.X = (this.X - 1) & 0xFFFF;
+      this.Y = (this.Y - 1) & 0xFFFF;
+      
+      // Decrement counter
+      this.A = (this.A - 1) & 0xFFFF;
+      
+      // If not done, repeat (don't advance PC)
+      if (this.A !== 0xFFFF) {
+        this.PC = (this.PC - 3) & 0xFFFF;
+      }
+      
+      this.cycles += 7;
     };
     
     return table;
