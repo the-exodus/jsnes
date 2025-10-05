@@ -22,6 +22,7 @@ export class PPU {
     this.registers = {
       // Screen display
       inidisp: 0x80,    // Screen display (bit 7 = force blank)
+      obsel: 0,         // Object size and base address
       bgmode: 0x00,     // BG mode and character size
       mosaic: 0x00,     // Mosaic size and enable
       
@@ -53,6 +54,8 @@ export class PPU {
       wh1: 0,           // Window 1 right position
       wh2: 0,           // Window 2 left position
       wh3: 0,           // Window 2 right position
+      wbglog: 0,        // Window mask logic for BGs
+      wobjlog: 0,       // Window mask logic for OBJs
       
       // Main/sub screen settings
       tm: 0,            // Main screen designation
@@ -64,6 +67,7 @@ export class PPU {
       cgwsel: 0,        // Color addition select
       cgadsub: 0,       // Color math designation
       coldata: 0,       // Fixed color data
+      setini: 0,        // Display control 2
       
       // VRAM access
       vmain: 0,         // Video port control
@@ -375,12 +379,45 @@ export class PPU {
       this.registers.inidisp = value;
       break;
     case 0x2101: // OBSEL - Object size and address
+      this.registers.obsel = value;
+      break;
+    case 0x2102: // OAMADDL - OAM address low
+      this.oamAddress = (this.oamAddress & 0x0200) | value;
+      break;
+    case 0x2103: // OAMADDH - OAM address high and priority
+      this.oamAddress = (this.oamAddress & 0x00FF) | ((value & 1) << 8);
+      break;
+    case 0x2104: // OAMDATA - OAM data write
+      this.memory.oam[this.oamAddress] = value;
+      this.oamAddress = (this.oamAddress + 1) & 0x21F;
       break;
     case 0x2105: // BGMODE
       this.registers.bgmode = value;
       break;
     case 0x2106: // MOSAIC
       this.registers.mosaic = value;
+      break;
+      
+    // Background tilemap addresses
+    case 0x2107: // BG1SC
+      this.registers.bg1sc = value;
+      break;
+    case 0x2108: // BG2SC
+      this.registers.bg2sc = value;
+      break;
+    case 0x2109: // BG3SC
+      this.registers.bg3sc = value;
+      break;
+    case 0x210A: // BG4SC
+      this.registers.bg4sc = value;
+      break;
+      
+    // Background character addresses
+    case 0x210B: // BG12NBA
+      this.registers.bg12nba = value;
+      break;
+    case 0x210C: // BG34NBA
+      this.registers.bg34nba = value;
       break;
       
     // Background scroll registers
@@ -396,6 +433,18 @@ export class PPU {
     case 0x2110: // BG2VOFS
       this.registers.bg2vofs = (this.registers.bg2vofs & 0xFF00) | value;
       break;
+    case 0x2111: // BG3HOFS
+      this.registers.bg3hofs = (this.registers.bg3hofs & 0xFF00) | value;
+      break;
+    case 0x2112: // BG3VOFS
+      this.registers.bg3vofs = (this.registers.bg3vofs & 0xFF00) | value;
+      break;
+    case 0x2113: // BG4HOFS
+      this.registers.bg4hofs = (this.registers.bg4hofs & 0xFF00) | value;
+      break;
+    case 0x2114: // BG4VOFS
+      this.registers.bg4vofs = (this.registers.bg4vofs & 0xFF00) | value;
+      break;
       
     // VRAM access
     case 0x2115: // VMAIN
@@ -404,9 +453,13 @@ export class PPU {
       break;
     case 0x2116: // VMADD low
       this.vramAddress = (this.vramAddress & 0xFF00) | value;
+      this.vramReadBuffer = this.memory.vram[this.vramAddress * 2] | 
+                            (this.memory.vram[this.vramAddress * 2 + 1] << 8);
       break;
     case 0x2117: // VMADD high
       this.vramAddress = (this.vramAddress & 0x00FF) | (value << 8);
+      this.vramReadBuffer = this.memory.vram[this.vramAddress * 2] | 
+                            (this.memory.vram[this.vramAddress * 2 + 1] << 8);
       break;
     case 0x2118: // VMDATA low
       this.memory.vram[this.vramAddress * 2] = value;
@@ -419,6 +472,29 @@ export class PPU {
       if ((this.registers.vmain & 0x80) !== 0) {
         this.vramAddress = (this.vramAddress + this.vramIncrement) & 0xFFFF;
       }
+      break;
+      
+    // Mode 7 registers
+    case 0x211A: // M7SEL
+      this.registers.m7sel = value;
+      break;
+    case 0x211B: // M7A
+      this.registers.m7a = value;
+      break;
+    case 0x211C: // M7B
+      this.registers.m7b = value;
+      break;
+    case 0x211D: // M7C
+      this.registers.m7c = value;
+      break;
+    case 0x211E: // M7D
+      this.registers.m7d = value;
+      break;
+    case 0x211F: // M7X
+      this.registers.m7x = value;
+      break;
+    case 0x2120: // M7Y
+      this.registers.m7y = value;
       break;
       
     // CGRAM access
@@ -435,12 +511,61 @@ export class PPU {
       this.cgramAddress = (this.cgramAddress + 1) & 0x1FF;
       break;
       
+    // Window registers
+    case 0x2123: // W12SEL
+      this.registers.w12sel = value;
+      break;
+    case 0x2124: // W34SEL
+      this.registers.w34sel = value;
+      break;
+    case 0x2125: // WOBJSEL
+      this.registers.wobjsel = value;
+      break;
+    case 0x2126: // WH0
+      this.registers.wh0 = value;
+      break;
+    case 0x2127: // WH1
+      this.registers.wh1 = value;
+      break;
+    case 0x2128: // WH2
+      this.registers.wh2 = value;
+      break;
+    case 0x2129: // WH3
+      this.registers.wh3 = value;
+      break;
+    case 0x212A: // WBGLOG
+      this.registers.wbglog = value;
+      break;
+    case 0x212B: // WOBJLOG
+      this.registers.wobjlog = value;
+      break;
+      
     // Main/sub screen designation
     case 0x212C: // TM
       this.registers.tm = value;
       break;
     case 0x212D: // TS
       this.registers.ts = value;
+      break;
+    case 0x212E: // TMW
+      this.registers.tmw = value;
+      break;
+    case 0x212F: // TSW
+      this.registers.tsw = value;
+      break;
+      
+    // Color math
+    case 0x2130: // CGWSEL
+      this.registers.cgwsel = value;
+      break;
+    case 0x2131: // CGADSUB
+      this.registers.cgadsub = value;
+      break;
+    case 0x2132: // COLDATA
+      this.registers.coldata = value;
+      break;
+    case 0x2133: // SETINI
+      this.registers.setini = value;
       break;
     }
   }
@@ -450,10 +575,56 @@ export class PPU {
    */
   readRegister(address) {
     switch (address) {
+    case 0x2134: // MPYL - Multiplication result low
+      return (this.registers.m7a * (this.registers.m7b >> 8)) & 0xFF;
+      
+    case 0x2135: // MPYM - Multiplication result middle
+      return ((this.registers.m7a * (this.registers.m7b >> 8)) >> 8) & 0xFF;
+      
+    case 0x2136: // MPYH - Multiplication result high
+      return ((this.registers.m7a * (this.registers.m7b >> 8)) >> 16) & 0xFF;
+      
     case 0x2137: // SLHV - Software latch for H/V counters
       this.latchedHCounter = this.cycle;
       this.latchedVCounter = this.scanline;
       return 0;
+      
+    case 0x2138: { // OAMDATAREAD - OAM data read
+      const value = this.memory.oam[this.oamAddress];
+      this.oamAddress = (this.oamAddress + 1) & 0x21F;
+      return value;
+    }
+      
+    case 0x2139: { // VMDATALREAD - VRAM data read low
+      const value = this.vramReadBuffer & 0xFF;
+      if ((this.registers.vmain & 0x80) === 0) {
+        this.vramAddress = (this.vramAddress + this.vramIncrement) & 0xFFFF;
+        this.vramReadBuffer = this.memory.vram[this.vramAddress * 2] | 
+                              (this.memory.vram[this.vramAddress * 2 + 1] << 8);
+      }
+      return value;
+    }
+      
+    case 0x213A: { // VMDATAHREAD - VRAM data read high
+      const value = (this.vramReadBuffer >> 8) & 0xFF;
+      if ((this.registers.vmain & 0x80) !== 0) {
+        this.vramAddress = (this.vramAddress + this.vramIncrement) & 0xFFFF;
+        this.vramReadBuffer = this.memory.vram[this.vramAddress * 2] | 
+                              (this.memory.vram[this.vramAddress * 2 + 1] << 8);
+      }
+      return value;
+    }
+      
+    case 0x213B: { // CGDATAREAD - CGRAM data read
+      let value;
+      if ((this.cgramAddress & 1) === 0) {
+        value = this.memory.cgram[this.cgramAddress];
+      } else {
+        value = this.memory.cgram[this.cgramAddress] & 0x7F; // High byte only has 7 bits
+      }
+      this.cgramAddress = (this.cgramAddress + 1) & 0x1FF;
+      return value;
+    }
       
     case 0x213C: // OPHCT - Horizontal counter (low)
       return this.latchedHCounter & 0xFF;
@@ -461,10 +632,17 @@ export class PPU {
     case 0x213D: // OPVCT - Vertical counter (low)
       return this.latchedVCounter & 0xFF;
       
-    case 0x213F: { // STAT78 - PPU status
-      const stat78 = 0x00 |
-        (this.latchedHCounter & 0x100 ? 0x40 : 0) |
-        (this.latchedVCounter & 0x100 ? 0x80 : 0);
+    case 0x213E: { // STAT77 - PPU1 status
+      const stat77 = 0x01; // PPU1 version
+      return stat77;
+    }
+      
+    case 0x213F: { // STAT78 - PPU2 status
+      const stat78 = 0x03 | // PPU2 version (bits 0-3)
+        (this.latchedHCounter & 0x100 ? 0x40 : 0) | // H counter high bit
+        (this.latchedVCounter & 0x100 ? 0x80 : 0) | // V counter high bit
+        (this.inVBlank ? 0x80 : 0) |                 // VBlank flag (also bit 7)
+        (this.oddFrame ? 0x80 : 0);                  // Interlace field (also bit 7)
       return stat78;
     }
       
