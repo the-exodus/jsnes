@@ -20,14 +20,68 @@ describe('Debug test-game2.sfc', () => {
   it('should test game progress with new I/O registers', () => {
     console.log('\nTesting King Arthur World with new I/O registers...\n');
 
-    // Track writes to $4200
+    // Track the REP/LDA/TAX sequence that should initialize X
+    const initTrace = [];
+    const originalStep = emulator.cpu.step.bind(emulator.cpu);
+    emulator.cpu.step = function() {
+      const pc = (this.PBR << 16) | this.PC;
+      
+      // Track the initialization sequence at $02DE65-$02DE6A
+      if (emulator.ppu.frame === 5 && pc >= 0x02DE65 && pc <= 0x02DE6C && initTrace.length < 10) {
+        const opcode = emulator.memory.read(pc);
+        initTrace.push({
+          pc,
+          opcode,
+          A_before: this.A,
+          X_before: this.X,
+          P_before: this.P
+        });
+      }
+      
+      const result = originalStep();
+      
+      // Track after execution
+      if (initTrace.length > 0 && initTrace[initTrace.length - 1].A_after === undefined) {
+        const last = initTrace[initTrace.length - 1];
+        last.A_after = this.A;
+        last.X_after = this.X;
+        last.P_after = this.P;
+      }
+      
+      return result;
+    };
+
+    // Track writes to $4200 and SRAM access
     const nmitemenWrites = [];
+    let sramReads = 0;
+    let sramWrites = 0;
+    
     const originalWriteIO = emulator.memory.writeIO.bind(emulator.memory);
     emulator.memory.writeIO = function(address, value) {
       if (address === 0x4200) {
         nmitemenWrites.push({ frame: emulator.ppu.frame, value });
       }
       return originalWriteIO(address, value);
+    };
+    
+    const originalRead = emulator.memory.read.bind(emulator.memory);
+    emulator.memory.read = function(address) {
+      const bank = (address >> 16) & 0xFF;
+      const offset = address & 0xFFFF;
+      if (bank < 0x70 && offset >= 0x6000 && offset < 0x8000) {
+        sramReads++;
+      }
+      return originalRead(address);
+    };
+    
+    const originalWrite = emulator.memory.write.bind(emulator.memory);
+    emulator.memory.write = function(address, value) {
+      const bank = (address >> 16) & 0xFF;
+      const offset = address & 0xFFFF;
+      if (bank < 0x70 && offset >= 0x6000 && offset < 0x8000) {
+        sramWrites++;
+      }
+      return originalWrite(address, value);
     };
 
     function getEnabledLayers(tm) {
@@ -78,6 +132,25 @@ describe('Debug test-game2.sfc', () => {
     } else {
       console.log('NO WRITES TO $4200 - Game never enables NMI/auto-joypad!');
     }
+    
+    console.log(`\n=== SRAM Access ===`);
+    console.log(`SRAM reads: ${sramReads}`);
+    console.log(`SRAM writes: ${sramWrites}`);
+    
+    // Check SRAM content
+    let sramNonZero = 0;
+    for (let i = 0; i < 100; i++) {
+      if (emulator.memory.sram[i] !== 0) sramNonZero++;
+    }
+    console.log(`SRAM first 100 bytes non-zero: ${sramNonZero}`);
+    console.log('First 32 SRAM bytes:', Array.from(emulator.memory.sram.slice(0, 32)).map(v => v.toString(16).padStart(2, '0')).join(' '));
+    
+    // Show initialization sequence trace
+    console.log(`\n=== REP/LDA/TAX initialization sequence at $02DE65 ===`);
+    console.log('Expected: REP #$30 (16-bit mode), LDA #$0000, TAX (X should become $0000)');
+    initTrace.forEach((entry, i) => {
+      console.log(`[${i}] $${entry.pc.toString(16).padStart(6, '0')}: ${entry.opcode.toString(16).padStart(2, '0')} | A: ${entry.A_before.toString(16).padStart(4, '0')}->${entry.A_after ? entry.A_after.toString(16).padStart(4, '0') : '????'} X: ${entry.X_before.toString(16).padStart(4, '0')}->${entry.X_after ? entry.X_after.toString(16).padStart(4, '0') : '????'} P: ${entry.P_before.toString(16).padStart(2, '0')}->${entry.P_after ? entry.P_after.toString(16).padStart(2, '0') : '??'}`);
+    });
 
     expect(true).toBe(true);
   });
