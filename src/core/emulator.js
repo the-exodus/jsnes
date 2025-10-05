@@ -104,6 +104,17 @@ export class Emulator {
       null
     );
     
+    // Auto-joypad read registers (0x4218-0x421F)
+    // These return the controller state captured during VBlank
+    this.memory.registerIOHandler(0x4218, () => this.joypad1 & 0xFF, null);
+    this.memory.registerIOHandler(0x4219, () => (this.joypad1 >> 8) & 0xFF, null);
+    this.memory.registerIOHandler(0x421A, () => this.joypad2 & 0xFF, null);
+    this.memory.registerIOHandler(0x421B, () => (this.joypad2 >> 8) & 0xFF, null);
+    this.memory.registerIOHandler(0x421C, () => 0, null); // Joy3 low
+    this.memory.registerIOHandler(0x421D, () => 0, null); // Joy3 high
+    this.memory.registerIOHandler(0x421E, () => 0, null); // Joy4 low
+    this.memory.registerIOHandler(0x421F, () => 0, null); // Joy4 high
+    
     // Joypad state
     this.joypad1 = 0;
     this.joypad2 = 0;

@@ -353,20 +353,20 @@ export class PPU {
     
     switch (layer) {
     case 0:
-      tilemapAddr = (this.registers.bg1sc & 0xFC) << 8;
-      charBase = (this.registers.bg12nba & 0x0F) << 12;
+      tilemapAddr = ((this.registers.bg1sc & 0xFC) >> 2) << 11;
+      charBase = (this.registers.bg12nba & 0x0F) << 13;
       break;
     case 1:
-      tilemapAddr = (this.registers.bg2sc & 0xFC) << 8;
-      charBase = (this.registers.bg12nba & 0xF0) << 8;
+      tilemapAddr = ((this.registers.bg2sc & 0xFC) >> 2) << 11;
+      charBase = ((this.registers.bg12nba & 0xF0) >> 4) << 13;
       break;
     case 2:
-      tilemapAddr = (this.registers.bg3sc & 0xFC) << 8;
-      charBase = (this.registers.bg34nba & 0x0F) << 12;
+      tilemapAddr = ((this.registers.bg3sc & 0xFC) >> 2) << 11;
+      charBase = (this.registers.bg34nba & 0x0F) << 13;
       break;
     case 3:
-      tilemapAddr = (this.registers.bg4sc & 0xFC) << 8;
-      charBase = (this.registers.bg34nba & 0xF0) << 8;
+      tilemapAddr = ((this.registers.bg4sc & 0xFC) >> 2) << 11;
+      charBase = ((this.registers.bg34nba & 0xF0) >> 4) << 13;
       break;
     }
     
