@@ -94,9 +94,14 @@ export class Emulator {
    */
   runFrame() {
     const targetCycles = this.cyclesPerFrame;
+    const cyclesPerScanline = 1364; // NTSC timing: ~1364 master cycles per scanline
     let cycles = 0;
     let iterations = 0;
     const maxIterations = targetCycles * 2; // Safety limit to prevent infinite loops
+    let nextScanlineCycles = cyclesPerScanline; // Cycles until next scanline
+    
+    // Track VBlank state to trigger NMI once
+    let wasInVBlank = this.ppu.inVBlank;
     
     while (cycles < targetCycles && iterations < maxIterations) {
       iterations++;
@@ -114,21 +119,23 @@ export class Emulator {
       // Execute APU (runs at different speed)
       this.apu.step(cpuCycles);
       
-      // Execute PPU (dot-based timing)
-      // Simplified: Run PPU per scanline
-      const scanlinesNeeded = Math.floor(cycles / 1364); // ~1364 cycles per scanline
-      
-      for (let i = 0; i < scanlinesNeeded; i++) {
+      // Execute PPU - check if we should advance scanline
+      while (cycles >= nextScanlineCycles && nextScanlineCycles <= targetCycles) {
         this.ppu.scanlineStep();
+        nextScanlineCycles += cyclesPerScanline;
+        
+        // Trigger NMI when entering VBlank
+        if (!wasInVBlank && this.ppu.inVBlank) {
+          this.cpu.nmiPending = true;
+          wasInVBlank = true;
+        }
+        if (wasInVBlank && !this.ppu.inVBlank) {
+          wasInVBlank = false;
+        }
       }
     }
     
     this.masterClock += cycles;
-    
-    // Trigger NMI at VBlank if enabled
-    if (this.ppu.inVBlank) {
-      this.cpu.nmiPending = true;
-    }
     
     return this.ppu.getFrameBuffer();
   }
