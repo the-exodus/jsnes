@@ -91,14 +91,19 @@ function runEmulation() {
     const framebuffer = emulator.runFrame();
     const audioSamples = emulator.getAudioSamples();
     
+    // Create a copy of the framebuffer to avoid detaching the original
+    // This is necessary because the PPU reuses the same buffer every frame
+    const framebufferCopy = new Uint32Array(framebuffer);
+    
     // Send frame data back to main thread
+    // Transfer the copy's buffer for better performance
     self.postMessage({
       type: 'frame',
       data: {
-        framebuffer: framebuffer.buffer,
+        framebuffer: framebufferCopy.buffer,
         audioSamples: audioSamples
       }
-    }, [framebuffer.buffer]);
+    }, [framebufferCopy.buffer]);
     
   } catch (error) {
     console.error('Emulation error:', error);
