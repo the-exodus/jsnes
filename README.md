@@ -7,6 +7,7 @@ A fully functioning Super Nintendo Entertainment System (SNES) emulator written 
 - **Accurate CPU Emulation**: Full implementation of the Ricoh 5A22 (WDC 65C816)
 - **PPU Support**: S-PPU1 and S-PPU2 emulation with all background modes and sprite rendering
 - **APU Emulation**: S-SMP (SPC700) and S-DSP for authentic audio
+- **IPL High-Level Emulation**: No proprietary SNES boot ROM required
 - **Memory Mapping**: Support for LoROM and HiROM cartridge formats
 - **Web Worker Integration**: Core emulation runs in a separate thread for optimal performance
 - **Modern APIs**: Canvas API for rendering, Web Audio API for sound
@@ -95,6 +96,14 @@ src/
 - 8-channel wavetable synthesizer
 - 64KB audio RAM
 - Real-time DSP effects
+
+### IPL High-Level Emulation
+- Emulates SNES Initial Program Loader (IPL) boot sequence
+- No proprietary Nintendo boot ROM required
+- Properly initializes CPU, APU/SPC700, and PPU
+- Includes authentic SPC700 boot program
+- Enables ROM execution without external dependencies
+- See [docs/IPL-HLE.md](docs/IPL-HLE.md) for details
 
 ## License
 

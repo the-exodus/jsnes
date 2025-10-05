@@ -28,19 +28,43 @@ export class APU {
   }
 
   reset() {
-    this.A = 0;
-    this.X = 0;
-    this.Y = 0;
-    this.SP = 0xFF;
-    this.PC = 0xFFC0; // Reset vector in APU RAM
-    this.PSW = 0;
+    // IPL HLE: SPC700 boot initialization
+    // The IPL ROM sets up the SPC700 with initial values
     
+    this.A = 0;          // Accumulator cleared
+    this.X = 0;          // X register cleared  
+    this.Y = 0;          // Y register cleared
+    this.SP = 0xEF;      // Stack pointer set to $EF (as per IPL boot code)
+    this.PC = 0xFFC0;    // Reset vector in APU RAM (IPL boot program location)
+    this.PSW = 0;        // Processor status word cleared
+    
+    // DSP registers initialized
     this.dspRegisters.fill(0);
+    
+    // Set DSP to safe state (as IPL boot code does)
+    // FLG register ($6C): Reset DSP, mute, disable echo
+    this.dspRegisters[0x6C] = 0xE0;
+    // KON register ($4C): All voices off
+    this.dspRegisters[0x4C] = 0x00;
+    // KOF register ($5C): All voices off  
+    this.dspRegisters[0x5C] = 0x00;
+    
     this.buffer = [];
     this.cycles = 0;
     
-    // Clear APU RAM
-    this.memory.apuRam.fill(0);
+    // Don't clear APU RAM here - it's initialized in Memory.setupIPLHLE()
+    // which includes the boot ROM at $FFC0-$FFFF
+    // Only clear the working area (leave boot ROM intact)
+    for (let i = 0; i < 0xFFC0; i++) {
+      this.memory.apuRam[i] = 0;
+    }
+    
+    // Initialize communication ports with IPL ready signals
+    // IPL boot code writes $AA to port 0 and $BB to port 1
+    this.memory.apuRam[0xF4] = 0xAA; // Port 0
+    this.memory.apuRam[0xF5] = 0xBB; // Port 1
+    this.memory.apuRam[0xF6] = 0x00; // Port 2
+    this.memory.apuRam[0xF7] = 0x00; // Port 3
   }
 
   /**

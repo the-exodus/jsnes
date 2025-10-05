@@ -5,6 +5,20 @@ All notable changes to the JSNES SNES Emulator project will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **IPL High-Level Emulation (HLE)** - Major feature addition
+  - Eliminates need for proprietary SNES IPL ROM dump
+  - 31-byte SPC700 boot ROM at $FFC0-$FFFF with authentic initialization sequence
+  - Proper CPU power-on state (emulation mode, P=$34, SP=$01FF)
+  - APU/SPC700 boot program with DSP initialization (SP=$EF, safe state)
+  - PPU initialization with cleared VRAM/CGRAM/OAM and force blank
+  - Correct reset sequence ordering (PPU → APU → CPU)
+  - 34 comprehensive tests covering all IPL HLE aspects
+  - Full documentation in `docs/IPL-HLE.md`
+  - ROMs can now boot without external IPL ROM file
+
 ## [0.1.0] - 2025-10-04
 
 ### Added

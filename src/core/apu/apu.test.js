@@ -16,7 +16,8 @@ describe('APU', () => {
       expect(apu.A).toBe(0);
       expect(apu.X).toBe(0);
       expect(apu.Y).toBe(0);
-      expect(apu.SP).toBe(0xFF);
+      // IPL HLE sets SP to $EF as per the real SNES IPL boot code
+      expect(apu.SP).toBe(0xEF);
       expect(apu.PC).toBe(0xFFC0);
     });
 
