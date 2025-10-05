@@ -22,8 +22,12 @@ describe('Memory', () => {
       expect(memory.mapperType).toBe('lorom');
     });
 
-    it('should initialize memory to zero', () => {
-      expect(memory.wram[0]).toBe(0);
+    it('should initialize memory to zero (except IPL HLE vectors)', () => {
+      // WRAM $0000-$0001 contains NMI handler vector ($801D) for IPL HLE
+      expect(memory.wram[0]).toBe(0x1D);
+      expect(memory.wram[1]).toBe(0x80);
+      // Rest of WRAM should be zero
+      expect(memory.wram[2]).toBe(0);
       expect(memory.wram[100]).toBe(0);
       expect(memory.vram[0]).toBe(0);
     });

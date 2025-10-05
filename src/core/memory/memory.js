@@ -38,6 +38,13 @@ export class Memory {
 
   reset() {
     this.wram.fill(0);
+    
+    // IPL HLE: Initialize NMI handler jump table
+    // WRAM $0000-$0001 contains the address that the NMI handler jumps to
+    // Initialize it to $801D (emulation mode NMI handler which just does RTI)
+    // This prevents hangs when NMI fires before game sets up its handler
+    this.wram[0] = 0x1D;
+    this.wram[1] = 0x80;
     this.vram.fill(0);
     this.cgram.fill(0);
     this.oam.fill(0);
