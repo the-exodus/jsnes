@@ -92,6 +92,7 @@ class App {
     case 'romLoaded':
       console.log('ROM loaded');
       this.renderer.clear();
+      this.hideOverlay();
       this.enableButton('startBtn');
       this.enableButton('resetBtn');
       break;
@@ -321,6 +322,7 @@ class App {
    */
   showError(message) {
     console.error(message);
+    this.showOverlay();
     this.showMessage('Error: ' + message);
   }
 
@@ -331,6 +333,26 @@ class App {
     const btn = document.getElementById(id);
     if (btn) {
       btn.disabled = false;
+    }
+  }
+
+  /**
+   * Hide loading overlay
+   */
+  hideOverlay() {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+      overlay.style.display = 'none';
+    }
+  }
+
+  /**
+   * Show loading overlay
+   */
+  showOverlay() {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+      overlay.style.display = 'block';
     }
   }
 }
