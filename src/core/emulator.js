@@ -57,12 +57,17 @@ export class Emulator {
     );
     
     // CPU I/O registers
+    // NMI flag - set when VBlank NMI occurs, cleared on read
+    this.nmiFlag = false;
+    
     this.memory.registerIOHandler(0x4210,
       () => {
         // RDNMI - NMI flag (read and clear)
         // Bit 7: NMI flag (set when NMI occurs)
         // Bits 0-3: CPU version
-        return 0x02; // Version 2, no pending NMI
+        const value = (this.nmiFlag ? 0x80 : 0x00) | 0x02; // Version 2
+        this.nmiFlag = false; // Reading clears the flag
+        return value;
       },
       null
     );
@@ -171,6 +176,7 @@ export class Emulator {
         // Trigger NMI when entering VBlank
         if (!wasInVBlank && this.ppu.inVBlank) {
           this.cpu.nmiPending = true;
+          this.nmiFlag = true; // Set NMI flag for $4210
           wasInVBlank = true;
         }
         if (wasInVBlank && !this.ppu.inVBlank) {
