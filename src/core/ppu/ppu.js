@@ -332,11 +332,102 @@ export class PPU {
   /**
    * Get pixel from a tile
    */
-  // eslint-disable-next-line no-unused-vars
   getTilePixel(layer, tileIndex, pixelX, pixelY, bpp) {
-    // Simplified implementation
-    // Actual implementation needs to properly read from VRAM
-    return 0;
+    // Get tilemap and character base addresses
+    let tilemapAddr = 0;
+    let charBase = 0;
+    
+    switch (layer) {
+    case 0:
+      tilemapAddr = (this.registers.bg1sc & 0xFC) << 8;
+      charBase = (this.registers.bg12nba & 0x0F) << 12;
+      break;
+    case 1:
+      tilemapAddr = (this.registers.bg2sc & 0xFC) << 8;
+      charBase = (this.registers.bg12nba & 0xF0) << 8;
+      break;
+    case 2:
+      tilemapAddr = (this.registers.bg3sc & 0xFC) << 8;
+      charBase = (this.registers.bg34nba & 0x0F) << 12;
+      break;
+    case 3:
+      tilemapAddr = (this.registers.bg4sc & 0xFC) << 8;
+      charBase = (this.registers.bg34nba & 0xF0) << 8;
+      break;
+    }
+    
+    // Read tile data from tilemap
+    const tilemapOffset = tilemapAddr + (tileIndex * 2);
+    if (tilemapOffset + 1 >= this.memory.vram.length) {
+      return 0;
+    }
+    
+    const tileLow = this.memory.vram[tilemapOffset];
+    const tileHigh = this.memory.vram[tilemapOffset + 1];
+    const tileData = (tileHigh << 8) | tileLow;
+    
+    // Extract tile properties
+    const charNum = tileData & 0x03FF;
+    const palette = (tileData >> 10) & 0x07;
+    const priority = (tileData >> 13) & 0x01;
+    const flipX = (tileData >> 14) & 0x01;
+    const flipY = (tileData >> 15) & 0x01;
+    
+    // Apply flipping
+    const actualX = flipX ? (7 - pixelX) : pixelX;
+    const actualY = flipY ? (7 - pixelY) : pixelY;
+    
+    // Calculate character address
+    const bytesPerTile = (bpp / 2) * 8; // 8 bytes per bitplane pair
+    const charAddr = charBase + (charNum * bytesPerTile);
+    
+    // Read pixel data based on bpp
+    let colorIndex = 0;
+    
+    if (bpp === 2) {
+      // 2bpp: 2 bitplanes
+      const plane0 = charAddr + actualY;
+      const plane1 = charAddr + actualY + 8;
+      
+      if (plane1 < this.memory.vram.length) {
+        const bit = 7 - actualX;
+        const bit0 = (this.memory.vram[plane0] >> bit) & 1;
+        const bit1 = (this.memory.vram[plane1] >> bit) & 1;
+        colorIndex = bit0 | (bit1 << 1);
+      }
+    } else if (bpp === 4) {
+      // 4bpp: 4 bitplanes
+      const plane0 = charAddr + actualY;
+      const plane1 = charAddr + actualY + 8;
+      const plane2 = charAddr + actualY + 16;
+      const plane3 = charAddr + actualY + 24;
+      
+      if (plane3 < this.memory.vram.length) {
+        const bit = 7 - actualX;
+        const bit0 = (this.memory.vram[plane0] >> bit) & 1;
+        const bit1 = (this.memory.vram[plane1] >> bit) & 1;
+        const bit2 = (this.memory.vram[plane2] >> bit) & 1;
+        const bit3 = (this.memory.vram[plane3] >> bit) & 1;
+        colorIndex = bit0 | (bit1 << 1) | (bit2 << 2) | (bit3 << 3);
+      }
+    } else if (bpp === 8) {
+      // 8bpp: 8 bitplanes
+      const bit = 7 - actualX;
+      for (let plane = 0; plane < 8; plane++) {
+        const planeAddr = charAddr + actualY + (plane * 8);
+        if (planeAddr < this.memory.vram.length) {
+          const bitValue = (this.memory.vram[planeAddr] >> bit) & 1;
+          colorIndex |= (bitValue << plane);
+        }
+      }
+    }
+    
+    // Add palette offset for color index
+    if (colorIndex > 0) {
+      colorIndex += (palette * (1 << bpp));
+    }
+    
+    return colorIndex;
   }
 
   /**
