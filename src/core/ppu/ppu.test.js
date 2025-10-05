@@ -298,4 +298,171 @@ describe('PPU', () => {
       expect(ppu.framebuffer[0]).toBeDefined();
     });
   });
+
+  describe('Additional Register Tests', () => {
+    it('should handle OAM address writes', () => {
+      ppu.writeRegister(0x2102, 0x34); // OAMADDL
+      ppu.writeRegister(0x2103, 0x01); // OAMADDH
+      expect(ppu.oamAddress).toBe(0x134);
+    });
+
+    it('should write and read OAM data', () => {
+      ppu.writeRegister(0x2102, 0x00); // Set OAM address to 0
+      ppu.writeRegister(0x2103, 0x00);
+      ppu.writeRegister(0x2104, 0x42); // Write data
+      
+      expect(memory.oam[0]).toBe(0x42);
+    });
+
+    it('should handle background tilemap registers', () => {
+      ppu.writeRegister(0x2107, 0x5C); // BG1SC
+      ppu.writeRegister(0x2108, 0x60); // BG2SC
+      ppu.writeRegister(0x2109, 0x64); // BG3SC
+      ppu.writeRegister(0x210A, 0x68); // BG4SC
+      
+      expect(ppu.registers.bg1sc).toBe(0x5C);
+      expect(ppu.registers.bg2sc).toBe(0x60);
+      expect(ppu.registers.bg3sc).toBe(0x64);
+      expect(ppu.registers.bg4sc).toBe(0x68);
+    });
+
+    it('should handle background character registers', () => {
+      ppu.writeRegister(0x210B, 0x12); // BG12NBA
+      ppu.writeRegister(0x210C, 0x34); // BG34NBA
+      
+      expect(ppu.registers.bg12nba).toBe(0x12);
+      expect(ppu.registers.bg34nba).toBe(0x34);
+    });
+
+    it('should handle BG3 and BG4 scroll registers', () => {
+      ppu.writeRegister(0x2111, 0x10); // BG3HOFS
+      ppu.writeRegister(0x2112, 0x20); // BG3VOFS
+      ppu.writeRegister(0x2113, 0x30); // BG4HOFS
+      ppu.writeRegister(0x2114, 0x40); // BG4VOFS
+      
+      expect(ppu.registers.bg3hofs & 0xFF).toBe(0x10);
+      expect(ppu.registers.bg3vofs & 0xFF).toBe(0x20);
+      expect(ppu.registers.bg4hofs & 0xFF).toBe(0x30);
+      expect(ppu.registers.bg4vofs & 0xFF).toBe(0x40);
+    });
+
+    it('should handle Mode 7 registers', () => {
+      ppu.writeRegister(0x211A, 0x01); // M7SEL
+      ppu.writeRegister(0x211B, 0x02); // M7A
+      ppu.writeRegister(0x211C, 0x03); // M7B
+      ppu.writeRegister(0x211D, 0x04); // M7C
+      ppu.writeRegister(0x211E, 0x05); // M7D
+      ppu.writeRegister(0x211F, 0x06); // M7X
+      ppu.writeRegister(0x2120, 0x07); // M7Y
+      
+      expect(ppu.registers.m7sel).toBe(0x01);
+      expect(ppu.registers.m7a).toBe(0x02);
+      expect(ppu.registers.m7b).toBe(0x03);
+      expect(ppu.registers.m7c).toBe(0x04);
+      expect(ppu.registers.m7d).toBe(0x05);
+      expect(ppu.registers.m7x).toBe(0x06);
+      expect(ppu.registers.m7y).toBe(0x07);
+    });
+
+    it('should handle window registers', () => {
+      ppu.writeRegister(0x2123, 0x11); // W12SEL
+      ppu.writeRegister(0x2124, 0x22); // W34SEL
+      ppu.writeRegister(0x2125, 0x33); // WOBJSEL
+      ppu.writeRegister(0x2126, 0x10); // WH0
+      ppu.writeRegister(0x2127, 0x20); // WH1
+      ppu.writeRegister(0x2128, 0x30); // WH2
+      ppu.writeRegister(0x2129, 0x40); // WH3
+      
+      expect(ppu.registers.w12sel).toBe(0x11);
+      expect(ppu.registers.w34sel).toBe(0x22);
+      expect(ppu.registers.wobjsel).toBe(0x33);
+      expect(ppu.registers.wh0).toBe(0x10);
+      expect(ppu.registers.wh1).toBe(0x20);
+      expect(ppu.registers.wh2).toBe(0x30);
+      expect(ppu.registers.wh3).toBe(0x40);
+    });
+
+    it('should handle color math registers', () => {
+      ppu.writeRegister(0x2130, 0x30); // CGWSEL
+      ppu.writeRegister(0x2131, 0x31); // CGADSUB
+      ppu.writeRegister(0x2132, 0x32); // COLDATA
+      ppu.writeRegister(0x2133, 0x08); // SETINI
+      
+      expect(ppu.registers.cgwsel).toBe(0x30);
+      expect(ppu.registers.cgadsub).toBe(0x31);
+      expect(ppu.registers.coldata).toBe(0x32);
+      expect(ppu.registers.setini).toBe(0x08);
+    });
+
+    it('should read VRAM data correctly', () => {
+      // Set VRAM increment mode (increment after high byte)
+      ppu.writeRegister(0x2115, 0x80);
+      
+      // Set up VRAM address and data
+      memory.vram[0x1000 * 2] = 0x34;
+      memory.vram[0x1000 * 2 + 1] = 0x12;
+      
+      // Set address (this also fills read buffer)
+      ppu.writeRegister(0x2116, 0x00); // VMADD low
+      ppu.writeRegister(0x2117, 0x10); // VMADD high (address = 0x1000)
+      
+      const low = ppu.readRegister(0x2139); // VMDATALREAD
+      expect(low).toBe(0x34);
+      
+      const high = ppu.readRegister(0x213A); // VMDATAHREAD
+      expect(high).toBe(0x12);
+    });
+
+    it('should read CGRAM data correctly', () => {
+      // Set up CGRAM
+      ppu.writeRegister(0x2121, 0x00); // CGADD
+      memory.cgram[0] = 0x1F;
+      memory.cgram[1] = 0x00;
+      
+      ppu.cgramAddress = 0;
+      const low = ppu.readRegister(0x213B); // CGDATAREAD
+      const high = ppu.readRegister(0x213B); // CGDATAREAD
+      
+      expect(low).toBe(0x1F);
+      expect(high).toBe(0x00);
+    });
+
+    it('should latch H/V counters', () => {
+      ppu.cycle = 123;
+      ppu.scanline = 45;
+      
+      ppu.readRegister(0x2137); // SLHV - latch counters
+      
+      expect(ppu.latchedHCounter).toBe(123);
+      expect(ppu.latchedVCounter).toBe(45);
+      
+      const hcount = ppu.readRegister(0x213C); // OPHCT
+      const vcount = ppu.readRegister(0x213D); // OPVCT
+      
+      expect(hcount).toBe(123);
+      expect(vcount).toBe(45);
+    });
+
+    it('should read PPU status registers', () => {
+      const stat77 = ppu.readRegister(0x213E); // STAT77
+      const stat78 = ppu.readRegister(0x213F); // STAT78
+      
+      expect(stat77).toBeDefined();
+      expect(stat78).toBeDefined();
+    });
+
+    it('should calculate multiplication result', () => {
+      ppu.registers.m7a = 0x0100; // 256
+      ppu.registers.m7b = 0x0200; // 512 << 8
+      
+      const low = ppu.readRegister(0x2134); // MPYL
+      const mid = ppu.readRegister(0x2135); // MPYM
+      const high = ppu.readRegister(0x2136); // MPYH
+      
+      // M7A * (M7B >> 8) = 256 * 2 = 512
+      expect(low).toBe(0x00);
+      expect(mid).toBe(0x02);
+      expect(high).toBe(0x00);
+    });
+  });
 });
