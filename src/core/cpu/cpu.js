@@ -58,16 +58,22 @@ export class CPU {
     
     // Load reset vector from ROM
     // IPL reads the reset vector at $FFFC-$FFFD and jumps there
-    const resetVector = this.memory.read16(0xFFFC);
-    
-    // IPL validation: If reset vector is 0x0000 or 0xFFFF, it's invalid
-    // Real IPL would handle this, we'll use a safe default
-    if (resetVector === 0x0000 || resetVector === 0xFFFF) {
-      // Default to $8000 which is a common ROM start in LoROM
-      this.PC = 0x8000;
-      console.warn('Invalid reset vector detected, defaulting to $8000');
+    // Only read if ROM is loaded (memory.rom is not null)
+    if (this.memory.rom && this.memory.rom.length > 0) {
+      const resetVector = this.memory.read16(0xFFFC);
+      
+      // IPL validation: If reset vector is 0x0000 or 0xFFFF, it's invalid
+      // Real IPL would handle this, we'll use a safe default
+      if (resetVector === 0x0000 || resetVector === 0xFFFF) {
+        // Default to $8000 which is a common ROM start in LoROM
+        this.PC = 0x8000;
+        console.warn('Invalid reset vector detected, defaulting to $8000');
+      } else {
+        this.PC = resetVector;
+      }
     } else {
-      this.PC = resetVector;
+      // No ROM loaded yet, default to $8000
+      this.PC = 0x8000;
     }
   }
 
