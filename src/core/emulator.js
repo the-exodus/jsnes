@@ -83,9 +83,20 @@ export class Emulator {
    * Reset emulator
    */
   reset() {
-    this.cpu.reset();
+    // IPL HLE: Perform reset sequence as the SNES IPL would
+    // Order matters: memory/PPU first, then APU, then CPU last
+    
+    // 1. PPU reset - clear display memory and set safe state
     this.ppu.reset();
+    
+    // 2. APU reset - initialize SPC700 with boot program
     this.apu.reset();
+    
+    // 3. CPU reset - initialize registers and jump to reset vector
+    // CPU reset must be last as it reads from memory/vectors
+    this.cpu.reset();
+    
+    // Reset master clock
     this.masterClock = 0;
   }
 

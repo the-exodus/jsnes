@@ -23,18 +23,30 @@ export class CPU {
   }
 
   reset() {
-    // Registers
-    this.A = 0;      // Accumulator (16-bit)
-    this.X = 0;      // X Index Register (16-bit)
-    this.Y = 0;      // Y Index Register (16-bit)
-    this.S = 0x01FF; // Stack Pointer (16-bit)
-    this.D = 0;      // Direct Page Register (16-bit)
-    this.PC = 0;     // Program Counter (16-bit)
-    this.PBR = 0;    // Program Bank Register (8-bit)
-    this.DBR = 0;    // Data Bank Register (8-bit)
-    this.P = 0x34;   // Status Register (8-bit) - Start in 8-bit mode
+    // IPL HLE: Initialize CPU registers as the SNES IPL ROM would
+    // The real IPL sets up the system in a known state before jumping to ROM
+    
+    // Registers - IPL initializes these
+    this.A = 0;      // Accumulator (16-bit) - cleared by IPL
+    this.X = 0;      // X Index Register (16-bit) - cleared by IPL
+    this.Y = 0;      // Y Index Register (16-bit) - cleared by IPL
+    this.S = 0x01FF; // Stack Pointer (16-bit) - IPL sets to top of stack
+    this.D = 0;      // Direct Page Register (16-bit) - IPL clears this
+    this.PC = 0;     // Program Counter (16-bit) - will be set from reset vector
+    this.PBR = 0;    // Program Bank Register (8-bit) - IPL clears bank
+    this.DBR = 0;    // Data Bank Register (8-bit) - IPL clears bank
+    
+    // Status Register - IPL sets CPU to emulation mode with specific flags
+    // I flag (IRQ disable) is SET, D flag (decimal) is CLEARED
+    // M and X flags are SET (8-bit mode)
+    // Status Register: 00110100
+    // Bit 5 (M - Memory 8-bit): 1
+    // Bit 4 (X - Index 8-bit): 1
+    // Bit 2 (I - IRQ disable): 1
+    this.P = 0x34;
     
     // Emulation mode flag (true = 6502 emulation mode)
+    // IPL starts in emulation mode (E=1)
     this.emulationMode = true;
     
     // Cycle counting
@@ -44,8 +56,19 @@ export class CPU {
     this.nmiPending = false;
     this.irqPending = false;
     
-    // Load reset vector
-    this.PC = this.memory.read16(0xFFFC);
+    // Load reset vector from ROM
+    // IPL reads the reset vector at $FFFC-$FFFD and jumps there
+    const resetVector = this.memory.read16(0xFFFC);
+    
+    // IPL validation: If reset vector is 0x0000 or 0xFFFF, it's invalid
+    // Real IPL would handle this, we'll use a safe default
+    if (resetVector === 0x0000 || resetVector === 0xFFFF) {
+      // Default to $8000 which is a common ROM start in LoROM
+      this.PC = 0x8000;
+      console.warn('Invalid reset vector detected, defaulting to $8000');
+    } else {
+      this.PC = resetVector;
+    }
   }
 
   /**

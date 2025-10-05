@@ -118,6 +118,9 @@ export class PPU {
   }
 
   reset() {
+    // IPL HLE: PPU initialization
+    // The IPL ensures PPU is in a safe state before ROM code runs
+    
     this.scanline = 0;
     this.cycle = 0;
     this.frame = 0;
@@ -128,14 +131,25 @@ export class PPU {
     // Clear framebuffer to black
     this.framebuffer.fill(0xFF000000);
     
-    // Reset registers
+    // Reset registers to power-on state
     Object.keys(this.registers).forEach(key => {
       if (key === 'inidisp') {
-        this.registers[key] = 0x80; // Force blank on
+        // IPL sets force blank on (bit 7) to disable display during initialization
+        this.registers[key] = 0x80; // Force blank on, brightness 0
       } else {
         this.registers[key] = 0;
       }
     });
+    
+    // IPL clears VRAM, CGRAM, and OAM for consistent state
+    // Clear VRAM to 0
+    this.memory.vram.fill(0);
+    
+    // Clear CGRAM to black (color 0)
+    this.memory.cgram.fill(0);
+    
+    // Clear OAM (no sprites initially)
+    this.memory.oam.fill(0);
   }
 
   /**
