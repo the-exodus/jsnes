@@ -89,10 +89,100 @@ export class Emulator {
         let status = 0;
         if (this.ppu.inVBlank) status |= 0x80;
         if (this.ppu.inHBlank) status |= 0x40;
+        // Auto-joypad is never busy in our implementation (instant read)
         return status;
       },
       null
     );
+    
+    // $4200 - NMITIMEN - Interrupt enable flags
+    this.nmiEnabled = false;
+    this.autoJoypadEnabled = false;
+    this.memory.registerIOHandler(0x4200,
+      null,
+      (value) => {
+        // Bit 7: Enable VBlank NMI
+        // Bit 5: Enable V-Counter IRQ
+        // Bit 4: Enable H-Counter IRQ
+        // Bit 0: Enable auto-joypad reading
+        this.nmiEnabled = (value & 0x80) !== 0;
+        this.autoJoypadEnabled = (value & 0x01) !== 0;
+      }
+    );
+    
+    // $4201 - WRIO - Programmable I/O port (out-port)
+    this.memory.registerIOHandler(0x4201, null, (value) => {
+      // This controls I/O port and joypad latch
+      // We don't need to do anything special here
+    });
+    
+    // $4202-$4206 - Multiplication and Division registers
+    this.multA = 0xFF;
+    this.multB = 0xFF;
+    this.divA = 0xFFFF;
+    this.divB = 0xFF;
+    
+    this.memory.registerIOHandler(0x4202, null, (value) => {
+      this.multA = value;
+    });
+    
+    this.memory.registerIOHandler(0x4203, null, (value) => {
+      this.multB = value;
+    });
+    
+    this.memory.registerIOHandler(0x4204, null, (value) => {
+      this.divA = (this.divA & 0xFF00) | value;
+    });
+    
+    this.memory.registerIOHandler(0x4205, null, (value) => {
+      this.divA = (this.divA & 0x00FF) | (value << 8);
+    });
+    
+    this.memory.registerIOHandler(0x4206, null, (value) => {
+      this.divB = value;
+    });
+    
+    // $4214-$4217 - Multiplication and Division results (read-only)
+    this.memory.registerIOHandler(0x4214, () => {
+      // Division quotient low byte OR Multiplication result low byte
+      if (this.divB !== 0) {
+        return Math.floor(this.divA / this.divB) & 0xFF;
+      }
+      return (this.multA * this.multB) & 0xFF;
+    }, null);
+    
+    this.memory.registerIOHandler(0x4215, () => {
+      // Division quotient high byte OR Multiplication result high byte
+      if (this.divB !== 0) {
+        return (Math.floor(this.divA / this.divB) >> 8) & 0xFF;
+      }
+      return ((this.multA * this.multB) >> 8) & 0xFF;
+    }, null);
+    
+    this.memory.registerIOHandler(0x4216, () => {
+      // Division remainder low byte
+      if (this.divB !== 0) {
+        return (this.divA % this.divB) & 0xFF;
+      }
+      return this.multA;
+    }, null);
+    
+    this.memory.registerIOHandler(0x4217, () => {
+      // Division remainder high byte
+      if (this.divB !== 0) {
+        return ((this.divA % this.divB) >> 8) & 0xFF;
+      }
+      return this.multB;
+    }, null);
+    
+    // $4207-$420D - IRQ/NMI timing and DMA control
+    this.memory.registerIOHandler(0x4207, null, (value) => { /* HTIME low */ });
+    this.memory.registerIOHandler(0x4208, null, (value) => { /* HTIME high */ });
+    this.memory.registerIOHandler(0x4209, null, (value) => { /* VTIME low */ });
+    this.memory.registerIOHandler(0x420A, null, (value) => { /* VTIME high */ });
+    this.memory.registerIOHandler(0x420B, null, (value) => { /* MDMAEN - DMA enable */ });
+    this.memory.registerIOHandler(0x420C, null, (value) => { /* HDMAEN - HDMA enable */ });
+    this.memory.registerIOHandler(0x420D, null, (value) => { /* MEMSEL - ROM speed */ });
     
     // Joypad registers (0x4016-0x4017)
     this.memory.registerIOHandler(0x4016,
@@ -184,10 +274,12 @@ export class Emulator {
         this.ppu.scanlineStep();
         nextScanlineCycles += cyclesPerScanline;
         
-        // Trigger NMI when entering VBlank
+        // Trigger NMI when entering VBlank (only if enabled)
         if (!wasInVBlank && this.ppu.inVBlank) {
-          this.cpu.nmiPending = true;
-          this.nmiFlag = true; // Set NMI flag for $4210
+          if (this.nmiEnabled) {
+            this.cpu.nmiPending = true;
+          }
+          this.nmiFlag = true; // Set NMI flag for $4210 regardless
           wasInVBlank = true;
         }
         if (wasInVBlank && !this.ppu.inVBlank) {
