@@ -2,6 +2,8 @@
 
 ## Project Overview
 JSNES is a SNES emulator in JavaScript (ES2022), ~4,000 lines. Runs in browser with 65C816 CPU, PPU, APU, and memory emulation.
+
+**IMPORTANT:** See `IMPLEMENTATION_STATUS.md` for accurate implementation details. CPU and memory are complete; PPU rendering and APU are partially implemented.
 **Stack:** Vite 5.0 (build), Vitest 1.0 (tests), ESLint 8.50, Node.js 18+, Canvas/WebAudio/WebWorker APIs.
 
 ## Build & Test Workflow (Commands in Order)
@@ -23,6 +25,9 @@ JSNES is a SNES emulator in JavaScript (ES2022), ~4,000 lines. Runs in browser w
 
 ## Known Issues
 - **Build:** Independent from tests. Can build without testing first.
+- **Graphics:** Background rendering incomplete, sprites not implemented. See `IMPLEMENTATION_STATUS.md`.
+- **Audio:** APU (SPC700 + DSP) not implemented. Complete silence.
+- **Games:** Most games show black screen due to incomplete PPU rendering.
 
 ## Project Structure
 ```
@@ -96,5 +101,10 @@ package.json       # Scripts & dependencies
 **Testing:** See `ipl-hle.test.js` for 34 comprehensive tests
 **ROM Loading:** LoROM reset vector at ROM offset $7FFC-$7FFD (maps to address $00:FFFC)
 
+## Debugging Tools
+- **Disassembler:** `node tools/disassembler.js <rom> <addr> <length>` - Examine ROM code
+- **Debug Guide:** See `docs/DEBUGGING.md` for tracing and debugging techniques
+- **Status:** See `IMPLEMENTATION_STATUS.md` for what's actually implemented vs documented
+
 ## Trust These Instructions
-All commands validated. Only search further if: instructions incomplete for your task, undocumented errors occur, or need implementation details. See README.md, DEVELOPMENT.md, QUICK_START.md, PROJECT_SUMMARY.md for more.
+All commands validated. Only search further if: instructions incomplete for your task, undocumented errors occur, or need implementation details. See README.md, DEVELOPMENT.md, QUICK_START.md, PROJECT_SUMMARY.md, IMPLEMENTATION_STATUS.md, and docs/DEBUGGING.md for more.

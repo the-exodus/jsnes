@@ -1,0 +1,51 @@
+name: Setup SNES Disassembler Environment
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  setup-tools:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Setup Python for disassembly tools
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install capstone  # Multi-architecture disassembler
+      
+      - name: Cache disassembler tools
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            tools/disasm
+          key: ${{ runner.os }}-disasm-tools-${{ hashFiles('**/package-lock.json') }}
+      
+      - name: Create tools directory
+        run: mkdir -p tools/disasm
+      
+      - name: Verify disassembler setup
+        run: |
+          echo "Node.js version: $(node --version)"
+          echo "Python version: $(python --version)"
+          echo "Disassembler tools ready for use"
+          ls -la tools/
