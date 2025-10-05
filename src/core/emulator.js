@@ -56,6 +56,39 @@ export class Emulator {
       (value) => this.memory.wram[wramAddr++ % this.memory.wram.length] = value
     );
     
+    // CPU I/O registers
+    this.memory.registerIOHandler(0x4210,
+      () => {
+        // RDNMI - NMI flag (read and clear)
+        // Bit 7: NMI flag (set when NMI occurs)
+        // Bits 0-3: CPU version
+        return 0x02; // Version 2, no pending NMI
+      },
+      null
+    );
+    
+    this.memory.registerIOHandler(0x4211,
+      () => {
+        // TIMEUP - IRQ flag (read and clear)
+        return 0x00; // No pending IRQ
+      },
+      null
+    );
+    
+    this.memory.registerIOHandler(0x4212,
+      () => {
+        // HVBJOY - H/V blank and joypad status
+        // Bit 7: VBlank flag (1=in VBlank)
+        // Bit 6: HBlank flag (1=in HBlank)
+        // Bit 0: Joypad auto-read busy
+        let status = 0;
+        if (this.ppu.inVBlank) status |= 0x80;
+        if (this.ppu.inHBlank) status |= 0x40;
+        return status;
+      },
+      null
+    );
+    
     // Joypad registers (0x4016-0x4017)
     this.memory.registerIOHandler(0x4016,
       () => this.readJoypad(0),
