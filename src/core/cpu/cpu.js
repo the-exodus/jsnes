@@ -58,16 +58,22 @@ export class CPU {
     
     // Load reset vector from ROM
     // IPL reads the reset vector at $FFFC-$FFFD and jumps there
-    const resetVector = this.memory.read16(0xFFFC);
-    
-    // IPL validation: If reset vector is 0x0000 or 0xFFFF, it's invalid
-    // Real IPL would handle this, we'll use a safe default
-    if (resetVector === 0x0000 || resetVector === 0xFFFF) {
-      // Default to $8000 which is a common ROM start in LoROM
-      this.PC = 0x8000;
-      console.warn('Invalid reset vector detected, defaulting to $8000');
+    // Only read if ROM is loaded (memory.rom is not null)
+    if (this.memory.rom && this.memory.rom.length > 0) {
+      const resetVector = this.memory.read16(0xFFFC);
+      
+      // IPL validation: If reset vector is 0x0000 or 0xFFFF, it's invalid
+      // Real IPL would handle this, we'll use a safe default
+      if (resetVector === 0x0000 || resetVector === 0xFFFF) {
+        // Default to $8000 which is a common ROM start in LoROM
+        this.PC = 0x8000;
+        console.warn('Invalid reset vector detected, defaulting to $8000');
+      } else {
+        this.PC = resetVector;
+      }
     } else {
-      this.PC = resetVector;
+      // No ROM loaded yet, default to $8000
+      this.PC = 0x8000;
     }
   }
 
@@ -88,9 +94,8 @@ export class CPU {
       return this.cycles - startCycles;
     }
     
-    // Fetch and execute instruction
-    const opcode = this.read8(this.PC);
-    this.PC = (this.PC + 1) & 0xFFFF;
+    // Fetch and execute instruction (uses PBR for code fetch)
+    const opcode = this.readCodeByte();
     
     this.executeOpcode(opcode);
     
@@ -138,10 +143,22 @@ export class CPU {
     this.updateNegativeFlag(value);
   }
 
-  // Memory access
+  // Memory access - Code fetch (uses PBR)
+  readCodeByte() {
+    this.cycles += 1;
+    // Form 24-bit address using PBR for code fetch
+    const fullAddress = (this.PBR << 16) | (this.PC & 0xFFFF);
+    const value = this.memory.read(fullAddress);
+    this.PC = (this.PC + 1) & 0xFFFF;
+    return value;
+  }
+
+  // Memory access - Data (uses DBR)
   read8(address) {
     this.cycles += 1;
-    return this.memory.read(address);
+    // Form 24-bit address using DBR for data access
+    const fullAddress = (this.DBR << 16) | (address & 0xFFFF);
+    return this.memory.read(fullAddress);
   }
 
   read16(address) {
@@ -152,7 +169,9 @@ export class CPU {
 
   write8(address, value) {
     this.cycles += 1;
-    this.memory.write(address, value & 0xFF);
+    // Form 24-bit address using DBR for data access
+    const fullAddress = (this.DBR << 16) | (address & 0xFFFF);
+    this.memory.write(fullAddress, value & 0xFF);
   }
 
   write16(address, value) {
@@ -211,7 +230,7 @@ export class CPU {
     this.cycles += 7;
   }
 
-  // Addressing modes
+  // Addressing modes (all fetch operands from code using PBR)
   immediate() {
     const addr = this.PC;
     const size = this.getFlag(CPUFlags.MEMORY_8BIT) ? 1 : 2;
@@ -220,80 +239,74 @@ export class CPU {
   }
 
   absolute() {
-    const addr = this.read16(this.PC);
-    this.PC = (this.PC + 2) & 0xFFFF;
-    return addr;
+    const low = this.readCodeByte();
+    const high = this.readCodeByte();
+    return (high << 8) | low;
   }
 
   absoluteX() {
-    const base = this.read16(this.PC);
-    this.PC = (this.PC + 2) & 0xFFFF;
+    const low = this.readCodeByte();
+    const high = this.readCodeByte();
+    const base = (high << 8) | low;
     return (base + this.X) & 0xFFFF;
   }
 
   absoluteY() {
-    const base = this.read16(this.PC);
-    this.PC = (this.PC + 2) & 0xFFFF;
+    const low = this.readCodeByte();
+    const high = this.readCodeByte();
+    const base = (high << 8) | low;
     return (base + this.Y) & 0xFFFF;
   }
 
   zeroPage() {
-    const addr = this.read8(this.PC);
-    this.PC = (this.PC + 1) & 0xFFFF;
-    return addr;
+    return this.readCodeByte();
   }
 
   zeroPageX() {
-    const base = this.read8(this.PC);
-    this.PC = (this.PC + 1) & 0xFFFF;
+    const base = this.readCodeByte();
     return (base + this.X) & 0xFF;
   }
 
   zeroPageY() {
-    const base = this.read8(this.PC);
-    this.PC = (this.PC + 1) & 0xFFFF;
+    const base = this.readCodeByte();
     return (base + this.Y) & 0xFF;
   }
 
   indirect() {
-    const ptr = this.read16(this.PC);
-    this.PC = (this.PC + 2) & 0xFFFF;
+    const low = this.readCodeByte();
+    const high = this.readCodeByte();
+    const ptr = (high << 8) | low;
     return this.read16(ptr);
   }
 
   indexedIndirect() {
-    const base = this.read8(this.PC);
-    this.PC = (this.PC + 1) & 0xFFFF;
+    const base = this.readCodeByte();
     const ptr = (base + this.X) & 0xFF;
     return this.read16(ptr);
   }
 
   indirectIndexed() {
-    const ptr = this.read8(this.PC);
-    this.PC = (this.PC + 1) & 0xFFFF;
+    const ptr = this.readCodeByte();
     const base = this.read16(ptr);
     return (base + this.Y) & 0xFFFF;
   }
 
   // Direct Page addressing - uses D register
   directPage() {
-    const offset = this.read8(this.PC);
-    this.PC = (this.PC + 1) & 0xFFFF;
+    const offset = this.readCodeByte();
     return (this.D + offset) & 0xFFFF;
   }
 
   // Direct Page Indirect: (dp)
   directPageIndirect() {
-    const dp = this.read8(this.PC);
-    this.PC = (this.PC + 1) & 0xFFFF;
+    const dp = this.readCodeByte();
     const addr = (this.D + dp) & 0xFFFF;
     return this.read16(addr);
   }
 
   // Direct Page Indirect Indexed with Y: (dp),Y
   directPageIndirectIndexedY() {
-    const dp = this.read8(this.PC);
-    this.PC = (this.PC + 1) & 0xFFFF;
+    const dp = this.readCodeByte();
     const addr = (this.D + dp) & 0xFFFF;
     const base = this.read16(addr);
     return (base + this.Y) & 0xFFFF;
@@ -301,8 +314,7 @@ export class CPU {
 
   // Direct Page Indirect Long: [dp]
   directPageIndirectLong() {
-    const dp = this.read8(this.PC);
-    this.PC = (this.PC + 1) & 0xFFFF;
+    const dp = this.readCodeByte();
     const addr = (this.D + dp) & 0xFFFF;
     const low = this.read8(addr);
     const mid = this.read8(addr + 1);
@@ -312,8 +324,7 @@ export class CPU {
 
   // Direct Page Indirect Long Indexed with Y: [dp],Y
   directPageIndirectLongIndexedY() {
-    const dp = this.read8(this.PC);
-    this.PC = (this.PC + 1) & 0xFFFF;
+    const dp = this.readCodeByte();
     const addr = (this.D + dp) & 0xFFFF;
     const low = this.read8(addr);
     const mid = this.read8(addr + 1);
@@ -324,27 +335,24 @@ export class CPU {
 
   // Absolute Long: long
   absoluteLong() {
-    const low = this.read8(this.PC);
-    const mid = this.read8(this.PC + 1);
-    const high = this.read8(this.PC + 2);
-    this.PC = (this.PC + 3) & 0xFFFF;
+    const low = this.readCodeByte();
+    const mid = this.readCodeByte();
+    const high = this.readCodeByte();
     return (high << 16) | (mid << 8) | low;
   }
 
   // Absolute Long Indexed with X: long,X
   absoluteLongIndexedX() {
-    const low = this.read8(this.PC);
-    const mid = this.read8(this.PC + 1);
-    const high = this.read8(this.PC + 2);
-    this.PC = (this.PC + 3) & 0xFFFF;
+    const low = this.readCodeByte();
+    const mid = this.readCodeByte();
+    const high = this.readCodeByte();
     const base = (high << 16) | (mid << 8) | low;
     return (base + this.X) & 0xFFFFFF;
   }
 
   // Stack Relative Indirect Indexed with Y: (sr,S),Y
   stackRelativeIndirectIndexedY() {
-    const offset = this.read8(this.PC);
-    this.PC = (this.PC + 1) & 0xFFFF;
+    const offset = this.readCodeByte();
     const addr = (this.S + offset) & 0xFFFF;
     const base = this.read16(addr);
     return (base + this.Y) & 0xFFFF;
@@ -768,8 +776,7 @@ export class CPU {
     table[0x22] = function() {
       const targetLow = this.read16(this.PC);
       this.PC = (this.PC + 2) & 0xFFFF;
-      const targetBank = this.read8(this.PC);
-      this.PC = (this.PC + 1) & 0xFFFF;
+      const targetBank = this.readCodeByte();
       
       this.push8(this.PBR);
       this.push16(this.PC);
@@ -792,8 +799,7 @@ export class CPU {
     
     // BMI - Branch if Minus/Negative
     table[0x30] = function() {
-      const offset = this.read8(this.PC);
-      this.PC = (this.PC + 1) & 0xFFFF;
+      const offset = this.readCodeByte();
       if (this.getFlag(CPUFlags.NEGATIVE)) {
         const signedOffset = offset < 0x80 ? offset : offset - 0x100;
         this.PC = (this.PC + signedOffset) & 0xFFFF;
@@ -805,8 +811,7 @@ export class CPU {
     
     // BRA - Branch Always
     table[0x80] = function() {
-      const offset = this.read8(this.PC);
-      this.PC = (this.PC + 1) & 0xFFFF;
+      const offset = this.readCodeByte();
       const signedOffset = offset < 0x80 ? offset : offset - 0x100;
       this.PC = (this.PC + signedOffset) & 0xFFFF;
       this.cycles += 3;
@@ -832,8 +837,7 @@ export class CPU {
     
     // REP - Reset Processor Status Bits
     table[0xC2] = function() {
-      const mask = this.read8(this.PC);
-      this.PC = (this.PC + 1) & 0xFFFF;
+      const mask = this.readCodeByte();
       this.P &= ~mask;
       this.cycles += 3;
     };
@@ -851,8 +855,7 @@ export class CPU {
     
     // SEP - Set Processor Status Bits
     table[0xE2] = function() {
-      const mask = this.read8(this.PC);
-      this.PC = (this.PC + 1) & 0xFFFF;
+      const mask = this.readCodeByte();
       this.P |= mask;
       this.cycles += 3;
     };
@@ -1184,8 +1187,7 @@ export class CPU {
 
     // ===== Branch opcodes =====
     table[0x10] = function() { // BPL - Branch if Plus (N=0)
-      const offset = this.read8(this.PC);
-      this.PC = (this.PC + 1) & 0xFFFF;
+      const offset = this.readCodeByte();
       if (!this.getFlag(CPUFlags.NEGATIVE)) {
         const signedOffset = offset < 0x80 ? offset : offset - 0x100;
         this.PC = (this.PC + signedOffset) & 0xFFFF;
@@ -1195,8 +1197,7 @@ export class CPU {
       }
     };
     table[0x50] = function() { // BVC - Branch if Overflow Clear (V=0)
-      const offset = this.read8(this.PC);
-      this.PC = (this.PC + 1) & 0xFFFF;
+      const offset = this.readCodeByte();
       if (!this.getFlag(CPUFlags.OVERFLOW)) {
         const signedOffset = offset < 0x80 ? offset : offset - 0x100;
         this.PC = (this.PC + signedOffset) & 0xFFFF;
@@ -1206,8 +1207,7 @@ export class CPU {
       }
     };
     table[0x70] = function() { // BVS - Branch if Overflow Set (V=1)
-      const offset = this.read8(this.PC);
-      this.PC = (this.PC + 1) & 0xFFFF;
+      const offset = this.readCodeByte();
       if (this.getFlag(CPUFlags.OVERFLOW)) {
         const signedOffset = offset < 0x80 ? offset : offset - 0x100;
         this.PC = (this.PC + signedOffset) & 0xFFFF;
@@ -1217,8 +1217,7 @@ export class CPU {
       }
     };
     table[0x90] = function() { // BCC - Branch if Carry Clear (C=0)
-      const offset = this.read8(this.PC);
-      this.PC = (this.PC + 1) & 0xFFFF;
+      const offset = this.readCodeByte();
       if (!this.getFlag(CPUFlags.CARRY)) {
         const signedOffset = offset < 0x80 ? offset : offset - 0x100;
         this.PC = (this.PC + signedOffset) & 0xFFFF;
@@ -1228,8 +1227,7 @@ export class CPU {
       }
     };
     table[0xB0] = function() { // BCS - Branch if Carry Set (C=1)
-      const offset = this.read8(this.PC);
-      this.PC = (this.PC + 1) & 0xFFFF;
+      const offset = this.readCodeByte();
       if (this.getFlag(CPUFlags.CARRY)) {
         const signedOffset = offset < 0x80 ? offset : offset - 0x100;
         this.PC = (this.PC + signedOffset) & 0xFFFF;
@@ -1239,8 +1237,7 @@ export class CPU {
       }
     };
     table[0xD0] = function() { // BNE - Branch if Not Equal (Z=0)
-      const offset = this.read8(this.PC);
-      this.PC = (this.PC + 1) & 0xFFFF;
+      const offset = this.readCodeByte();
       if (!this.getFlag(CPUFlags.ZERO)) {
         const signedOffset = offset < 0x80 ? offset : offset - 0x100;
         this.PC = (this.PC + signedOffset) & 0xFFFF;
@@ -1250,8 +1247,7 @@ export class CPU {
       }
     };
     table[0xF0] = function() { // BEQ - Branch if Equal (Z=1)
-      const offset = this.read8(this.PC);
-      this.PC = (this.PC + 1) & 0xFFFF;
+      const offset = this.readCodeByte();
       if (this.getFlag(CPUFlags.ZERO)) {
         const signedOffset = offset < 0x80 ? offset : offset - 0x100;
         this.PC = (this.PC + signedOffset) & 0xFFFF;
@@ -1337,8 +1333,7 @@ export class CPU {
       this.cycles += 6;
     };
     table[0xD4] = function() { // PEI - Push Effective Indirect
-      const dp = this.read8(this.PC);
-      this.PC = (this.PC + 1) & 0xFFFF;
+      const dp = this.readCodeByte();
       const addr = (this.D + dp) & 0xFFFF;
       const value = this.read16(addr);
       this.push16(value);
@@ -1521,7 +1516,7 @@ export class CPU {
 
     // ===== MVN/MVP - Block Move =====
     table[0x54] = function() { // MVN srcbk,destbk - Move Negative (ascending)
-      const destBank = this.read8(this.PC);
+      const destBank = this.readCodeByte();
       const srcBank = this.read8(this.PC + 1);
       this.PC = (this.PC + 2) & 0xFFFF;
       
@@ -1546,7 +1541,7 @@ export class CPU {
       this.cycles += 7;
     };
     table[0x44] = function() { // MVP srcbk,destbk - Move Positive (descending)
-      const destBank = this.read8(this.PC);
+      const destBank = this.readCodeByte();
       const srcBank = this.read8(this.PC + 1);
       this.PC = (this.PC + 2) & 0xFFFF;
       
@@ -1579,8 +1574,7 @@ export class CPU {
    * Adds X to direct page address, then reads the 16-bit pointer
    */
   directPageIndexedIndirectX() {
-    const dp = this.read8(this.PC);
-    this.PC = (this.PC + 1) & 0xFFFF;
+    const dp = this.readCodeByte();
     const addr = (this.D + dp + (this.X & 0xFF)) & 0xFFFF;
     return this.memory.read16(addr);
   }
@@ -1590,8 +1584,7 @@ export class CPU {
    * Address is stack pointer plus 8-bit offset
    */
   stackRelative() {
-    const offset = this.read8(this.PC);
-    this.PC = (this.PC + 1) & 0xFFFF;
+    const offset = this.readCodeByte();
     return (this.S + offset) & 0xFFFF;
   }
   
@@ -1600,8 +1593,7 @@ export class CPU {
    * Address is direct page register plus dp offset plus X register
    */
   directPageX() {
-    const dp = this.read8(this.PC);
-    this.PC = (this.PC + 1) & 0xFFFF;
+    const dp = this.readCodeByte();
     return (this.D + dp + (this.X & 0xFF)) & 0xFFFF;
   }
 }

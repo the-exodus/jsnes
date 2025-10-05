@@ -56,6 +56,44 @@ export class Emulator {
       (value) => this.memory.wram[wramAddr++ % this.memory.wram.length] = value
     );
     
+    // CPU I/O registers
+    // NMI flag - set when VBlank NMI occurs, cleared on read
+    this.nmiFlag = false;
+    
+    this.memory.registerIOHandler(0x4210,
+      () => {
+        // RDNMI - NMI flag (read and clear)
+        // Bit 7: NMI flag (set when NMI occurs)
+        // Bits 0-3: CPU version
+        const value = (this.nmiFlag ? 0x80 : 0x00) | 0x02; // Version 2
+        this.nmiFlag = false; // Reading clears the flag
+        return value;
+      },
+      null
+    );
+    
+    this.memory.registerIOHandler(0x4211,
+      () => {
+        // TIMEUP - IRQ flag (read and clear)
+        return 0x00; // No pending IRQ
+      },
+      null
+    );
+    
+    this.memory.registerIOHandler(0x4212,
+      () => {
+        // HVBJOY - H/V blank and joypad status
+        // Bit 7: VBlank flag (1=in VBlank)
+        // Bit 6: HBlank flag (1=in HBlank)
+        // Bit 0: Joypad auto-read busy
+        let status = 0;
+        if (this.ppu.inVBlank) status |= 0x80;
+        if (this.ppu.inHBlank) status |= 0x40;
+        return status;
+      },
+      null
+    );
+    
     // Joypad registers (0x4016-0x4017)
     this.memory.registerIOHandler(0x4016,
       () => this.readJoypad(0),
@@ -65,6 +103,17 @@ export class Emulator {
       () => this.readJoypad(1),
       null
     );
+    
+    // Auto-joypad read registers (0x4218-0x421F)
+    // These return the controller state captured during VBlank
+    this.memory.registerIOHandler(0x4218, () => this.joypad1 & 0xFF, null);
+    this.memory.registerIOHandler(0x4219, () => (this.joypad1 >> 8) & 0xFF, null);
+    this.memory.registerIOHandler(0x421A, () => this.joypad2 & 0xFF, null);
+    this.memory.registerIOHandler(0x421B, () => (this.joypad2 >> 8) & 0xFF, null);
+    this.memory.registerIOHandler(0x421C, () => 0, null); // Joy3 low
+    this.memory.registerIOHandler(0x421D, () => 0, null); // Joy3 high
+    this.memory.registerIOHandler(0x421E, () => 0, null); // Joy4 low
+    this.memory.registerIOHandler(0x421F, () => 0, null); // Joy4 high
     
     // Joypad state
     this.joypad1 = 0;
@@ -138,6 +187,7 @@ export class Emulator {
         // Trigger NMI when entering VBlank
         if (!wasInVBlank && this.ppu.inVBlank) {
           this.cpu.nmiPending = true;
+          this.nmiFlag = true; // Set NMI flag for $4210
           wasInVBlank = true;
         }
         if (wasInVBlank && !this.ppu.inVBlank) {
