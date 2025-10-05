@@ -4,9 +4,5 @@ coverage/
 *.log
 .DS_Store
 .idea/
-*.smc
-*.sfc
-*.rom
-*.srm
 .env
 .env.local
