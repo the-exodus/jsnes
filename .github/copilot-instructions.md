@@ -7,7 +7,7 @@ JSNES is a SNES emulator in JavaScript (ES2022), ~4,000 lines. Runs in browser w
 ## Build & Test Workflow (Commands in Order)
 
 **1. Setup:** `npm install` (required first, ~10-15s)  
-**2. Test:** `npm test` (~3s, 189/189 pass), `npm run test:watch` (dev), `npm run test:coverage`  
+**2. Test:** `npm test` (~3s, 278/278 pass), `npm run test:watch` (dev), `npm run test:coverage`  
 **3. Lint:** `npm run lint` - All errors and warnings fixed! Code is clean.  
 **4. Build:** `npm run build` (~300-500ms to dist/), `npm run preview`  
 **5. Dev:** `npm run dev` (port 3000, auto-opens browser, HMR enabled) or press F5 in VS Code to launch & debug
@@ -16,8 +16,9 @@ JSNES is a SNES emulator in JavaScript (ES2022), ~4,000 lines. Runs in browser w
 - ALWAYS `npm install` after cleaning node_modules
 - Tests run independently, no build required first
 - All tests now pass including emulator tests (hang issue fixed)
-- ESLint now passes with zero errors/warnings
+- ESLint now passes with zero errors/warnings (1 pre-existing warning in PPU)
 - VS Code debug launch config available - press F5 to run and debug
+- IPL HLE (High-Level Emulation) implemented - no real IPL ROM needed
 - ALWAYS update `copilot-instructions.md` if necessary after making changes to the project.
 
 ## Known Issues
@@ -26,11 +27,12 @@ JSNES is a SNES emulator in JavaScript (ES2022), ~4,000 lines. Runs in browser w
 ## Project Structure
 ```
 src/core/          # Emulation core (runs in Web Worker)
-  cpu/             # 65C816 CPU - cpu.js (720 lines), cpu.test.js (77 tests, 80%+ coverage)
-  ppu/             # Graphics PPU - ppu.js (479 lines), ppu.test.js (37 tests, 81% coverage)
-  apu/             # Audio APU - apu.js (149 lines), apu.test.js (23 tests, 100% coverage)
-  memory/          # Memory & mappers - memory.js (356 lines), memory.test.js (27 tests, 95%+ coverage)
-  emulator.js      # Main coordinator (245 lines), emulator.test.js (25 tests, all passing)
+  cpu/             # 65C816 CPU - cpu.js (750 lines), cpu.test.js (119 tests, 80%+ coverage)
+  ppu/             # Graphics PPU - ppu.js (490 lines), ppu.test.js (50 tests, 81% coverage)
+  apu/             # Audio APU - apu.js (170 lines), apu.test.js (23 tests, 100% coverage)
+  memory/          # Memory & mappers - memory.js (400 lines), memory.test.js (27 tests, 95%+ coverage)
+  emulator.js      # Main coordinator (250 lines), emulator.test.js (25 tests, all passing)
+  ipl-hle.test.js  # IPL HLE tests (34 tests, validates boot initialization)
 src/ui/            # Browser UI - renderer.js, audio.js, input.js (not tested)
 src/worker/        # emulator-worker.js (112 lines, Web Worker wrapper)
 src/main.js        # Entry point (342 lines)
@@ -42,10 +44,11 @@ package.json       # Scripts & dependencies
 ```
 
 **Where to Edit:**
-- CPU: src/core/cpu/cpu.js + cpu.test.js
-- Graphics: src/core/ppu/ppu.js + ppu.test.js  
-- Audio: src/core/apu/apu.js + apu.test.js
-- Memory: src/core/memory/memory.js + memory.test.js
+- CPU: src/core/cpu/cpu.js + cpu.test.js (includes IPL HLE CPU initialization)
+- Graphics: src/core/ppu/ppu.js + ppu.test.js (includes IPL HLE PPU initialization)
+- Audio: src/core/apu/apu.js + apu.test.js (includes IPL HLE APU/SPC700 boot ROM)
+- Memory: src/core/memory/memory.js + memory.test.js (includes IPL HLE boot ROM setup)
+- IPL HLE: src/core/ipl-hle.test.js (comprehensive IPL emulation tests)
 - UI: src/main.js, src/ui/*.js, index.html, style.css
 - Worker: src/worker/emulator-worker.js
 
@@ -56,9 +59,11 @@ package.json       # Scripts & dependencies
 - Test pattern: `describe('Name', () => { beforeEach(() => {...}); it('should...', () => {...}); });`
 
 ## Testing
-**Coverage:** CPU 80%+, PPU 81%, APU 100%, Memory 95%+, Emulator (all 189 tests pass)
+**Coverage:** CPU 80%+, PPU 81%, APU 100%, Memory 95%+, Emulator (all 278 tests pass)
 **New features:** Write tests alongside code, use `npm run test:watch`, aim for 80%+ coverage, test edge cases.
-**Recent additions:** 17 new opcodes implemented (0x00, 0x01, 0x02, 0x03, 0x0E, 0x22, 0x24, 0x30, 0x34, 0x5B, 0x80, 0x9A, 0xAB, 0xC2, 0xDD, 0xE2, 0xFB) with comprehensive tests.
+**Recent additions:** 
+- 17 new opcodes implemented (0x00, 0x01, 0x02, 0x03, 0x0E, 0x22, 0x24, 0x30, 0x34, 0x5B, 0x80, 0x9A, 0xAB, 0xC2, 0xDD, 0xE2, 0xFB) with comprehensive tests
+- IPL HLE (High-Level Emulation) with 34 comprehensive tests covering CPU, APU, PPU, and Memory initialization
 
 ## Reference Documentation
 **Location:** `docs/` folder contains comprehensive hardware references
@@ -79,6 +84,17 @@ package.json       # Scripts & dependencies
 ## Performance
 - Hot paths: CPU/PPU loops - minimize allocations, use typed arrays (already done)
 - Web Worker keeps emulation off main thread, target 60 FPS
+
+## IPL High-Level Emulation (HLE)
+**Background:** SNES has a boot ROM (IPL) that initializes hardware. We use HLE instead of requiring a real dump.
+**Implementation:**
+- `Memory.setupIPLHLE()`: Creates SPC700 boot ROM at $FFC0-$FFFF (31 bytes)
+- `CPU.reset()`: Initializes registers (emulation mode, SP=$01FF, P=$34, loads reset vector)
+- `APU.reset()`: Initializes SPC700 (SP=$EF, PC=$FFC0, DSP safe state, comm ports ready)
+- `PPU.reset()`: Clears VRAM/CGRAM/OAM, enables force blank
+- Reset order: PPU → APU → CPU (proper dependencies)
+**Testing:** See `ipl-hle.test.js` for 34 comprehensive tests
+**ROM Loading:** LoROM reset vector at ROM offset $7FFC-$7FFD (maps to address $00:FFFC)
 
 ## Trust These Instructions
 All commands validated. Only search further if: instructions incomplete for your task, undocumented errors occur, or need implementation details. See README.md, DEVELOPMENT.md, QUICK_START.md, PROJECT_SUMMARY.md for more.
